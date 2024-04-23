@@ -2,31 +2,34 @@ import jax.numpy as jnp
 from jax import grad
 
 
-def loss_recon(params, model, batch):
+def loss_recon(params, model, x):
     """
     Reconstruction loss
     """
-    x = batch["x"]
     x_hat = model.apply(params, x)
-    return jnp.mean(jnp.linalg.norm(x - x_hat, axis=1) ** 2)
+    return jnp.mean(jnp.linalg.norm(x - x_hat, axis=1)**2)
 
 
-def loss_dynamics_dz(params, encoder, batch, theta, xi, mask):
+def loss_dynamics_dx(params, decoder, x, dx_dt, theta, xi, mask):
+    """
+    Loss for the dynamics in x
+    """
+
+    def psi(z, params): return decoder.apply(params, z)
+    grad_psi = grad(psi, argnums=1)
+
+    return jnp.mean(jnp.linalg.norm(jnp.dot(grad_psi(params, x), dx_dt) - theta @ mask*xi, axis=1)**2)
+
+
+def loss_dynamics_dz(params, encoder, x, dx_dt, theta, xi, mask):
     """
     Loss for the dynamics in z
     """
-    x = batch["x"]
-    dx_dt = batch["dx"]
 
-    def phi(x, params):
-        return encoder.apply(params, x)
-
+    def phi(x, params): return encoder.apply(params, x)
     grad_phi = grad(phi, argnums=1)
 
-    return jnp.mean(
-        jnp.linalg.norm(jnp.dot(grad_phi(params, x), dx_dt) - theta @ mask * xi, axis=1)
-        ** 2
-    )
+    return jnp.mean(jnp.linalg.norm(jnp.dot(grad_phi(params, x), dx_dt) - theta @ mask*xi, axis=1)**2)
 
 
 def loss_regularization(xi):

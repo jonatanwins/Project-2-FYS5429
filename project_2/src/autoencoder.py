@@ -38,7 +38,9 @@ class Decoder(nn.Module):
 class Autoencoder(nn.Module):
     input_dim: int
     latent_dim: int
+    library_dim: int
     widths: list
+
     activation: nn.activation = nn.relu
 
     def setup(self):
