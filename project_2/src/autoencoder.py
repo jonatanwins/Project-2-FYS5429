@@ -10,11 +10,12 @@ class Encoder(nn.Module):
     latent_dim: int
     widths: list
     activation: nn.activation = nn.relu
+    initializer: nn.initializers = nn.initializers.glorot_normal()
 
     @nn.compact
     def __call__(self, x):
         for width in self.widths:
-            x = nn.Dense(width)(x)
+            x = nn.Dense(width, Initializer=initializer)(x)
             x = self.activation(x)
         z = nn.Dense(self.latent_dim)(x)
         return z
@@ -25,11 +26,12 @@ class Decoder(nn.Module):
     latent_dim: int
     widths: list
     activation: nn.activation = nn.relu
+    initializer: nn.initializers = nn.initializers.glorot_normal()
 
     @nn.compact
     def __call__(self, z):
         for width in reversed(self.widths):
-            z = nn.Dense(width)(z)
+            z = nn.Dense(width, Initializer=initializer)(z)
             z = self.activation(z)
         x_decode = nn.Dense(self.input_dim)(z)
         return x_decode
