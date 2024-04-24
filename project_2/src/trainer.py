@@ -4,9 +4,10 @@ from sindy_autoencoder import SindyAutoencoder
 from typing import Any, Callable, Dict, Tuple
 import jax.numpy as jnp
 from flax.training import train_state
+from jax import value_and_grad
 
 # import our loss functions
-from loss import loss_recon, loss_dynamics_dz, loss_regularization
+from loss import loss_fn
 
 
 class TrainState(train_state.TrainState):
@@ -40,21 +41,21 @@ class Trainer(TrainerModule):
         """
         def train_step(state: TrainState,
                        batch: Any):
-            metrics = {}
+    
+            val_grad_fn = value_and_grad(loss_fn, has_aux=True)
+            (loss, metrics), grad = val_grad_fn(state, batch)
+            optimizer = self.optimizer.apply_gradient(grad)
+            state = state.apply(optimizer=optimizer)
 
-            mask = state.mask
 
-                        
-            masked_coefficients = state.params['sindy_coefficients'] *  mask
-            
-            state = state.replace(mask=mask)
-            
-           
+
             return state, metrics
 
         def eval_step(state: TrainState,
                       batch: Any):
-            metrics = {}
+            
+            (loss, metrics) = loss_fn(state, batch)
+
             return metrics
 
         return train_step, eval_step

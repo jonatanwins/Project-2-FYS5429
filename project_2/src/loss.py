@@ -1,16 +1,16 @@
 import jax.numpy as jnp
 from jax import grad
+from sindy_utils import library_size, sindy_library
 
 
-def loss_recon(params, model, x):
+def loss_recon(x, x_hat):
     """
     Reconstruction loss
     """
-    x_hat = model.apply(params, x)
     return jnp.mean(jnp.linalg.norm(x - x_hat, axis=1)**2)
 
 
-def loss_dynamics_dx(params, decoder, x, dx_dt, theta, xi, mask):
+def loss_dynamics_dx(params, decoder, z, dx_dt, theta, xi, mask):
     """
     Loss for the dynamics in x
     """
@@ -18,7 +18,7 @@ def loss_dynamics_dx(params, decoder, x, dx_dt, theta, xi, mask):
     def psi(z, params): return decoder.apply(params, z)
     grad_psi = grad(psi, argnums=1)
 
-    return jnp.mean(jnp.linalg.norm(jnp.dot(grad_psi(params, x), dx_dt) - theta @ mask*xi, axis=1)**2)
+    return jnp.mean(jnp.linalg.norm(dx_dt - jnp.dot(grad_psi(params, z), theta @ mask*xi ), axis=1)**2)
 
 
 def loss_dynamics_dz(params, encoder, x, dx_dt, theta, xi, mask):
@@ -37,6 +37,32 @@ def loss_regularization(xi):
     Regularization loss
     """
     return jnp.linalg.norm(xi, ord=1)
+
+
+def loss_fn(model, state, batch):
+    """
+    Total loss function
+    """
+    x, dx_dt = batch
+    encoder = model.encoder
+    decoder = model.decoder
+    z, x_hat = model.apply(state.params, x)
+    theta = sindy_library(z, dx_dt, poly_order=2, include_sine=False, include_constant=True)
+    xi = state.params['sindy_coefficients']
+    mask = state.mask
+
+    encoder_params = {'params': state.params['encoder']}
+    decoder_params = {'params': state.params['decoder']}
+
+    loss_reconstruction = loss_recon(x, x_hat)
+
+    loss_dynamics_dx_part = loss_dynamics_dx(decoder_params, decoder, x, dx_dt, theta, xi, mask)
+    loss_dynamics_dz_part = loss_dynamics_dz(encoder_params, encoder, x, dx_dt, theta, xi, mask)
+    loss_reg = loss_regularization(xi)
+
+    total_loss = loss_reconstruction + loss_dynamics_dx_part + loss_dynamics_dz_part + loss_reg
+    return total_loss, {'loss': total_loss, 'reconstruction': loss_reconstruction, 'dynamics_dx': loss_dynamics_dx_part, 'dynamics_dz': loss_dynamics_dz_part, 'regularization': loss_reg}                                                                                                              
+
 
 
 # %% [markdown]

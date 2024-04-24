@@ -22,6 +22,7 @@ from jax import random
 from flax import linen as nn
 from flax.training import train_state, checkpoints
 import optax
+import jax.numpy as jnp
 
 
 # Logging with Tensorboard or Weights and Biases
@@ -38,6 +39,9 @@ class TrainState(train_state.TrainState):
     # For example, rng to keep for init, dropout, etc.
     rng: Any = None
 
+def update_mask(coefficients, threshold=0.1):
+    return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
+
 
 class TrainerModule:
 
@@ -51,7 +55,8 @@ class TrainerModule:
         logger_params: Dict[str, Any] = None,
         enable_progress_bar: bool = True,
         debug: bool = False,
-        check_val_every_n_epoch: int = 1,
+        check_val_every_n_epoch: int = 500,
+        update_mask_every_n_epoch: int = 500,
         **kwargs,
     ):
         """
@@ -80,6 +85,8 @@ class TrainerModule:
         self.debug = debug
         self.seed = seed
         self.check_val_every_n_epoch = check_val_every_n_epoch
+        self.update_mask_every_n_epoch = update_mask_every_n_epoch
+
         self.exmp_input = exmp_input
         # Set of hyperparameters to save
         self.config = {
@@ -318,6 +325,8 @@ class TrainerModule:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
+            if epoch_idx % self.update_mask_every_n_epoch == 0:
+                self.state.mask = update_mask(self.state.params['sindy_coefficients'])
         # Test best model if possible
         if test_loader is not None:
             self.load_model()
