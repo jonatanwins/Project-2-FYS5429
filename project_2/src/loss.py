@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import grad
-from sindy_utils import library_size, sindy_library
+from sindy_utils import library_size, sindy_library_first_order
 
 
 def loss_recon(x, x_hat):
@@ -47,7 +47,7 @@ def loss_fn(model, state, batch):
     encoder = model.encoder
     decoder = model.decoder
     z, x_hat = model.apply(state.params, x)
-    theta = sindy_library(z, dx_dt, poly_order=2, include_sine=False, include_constant=True)
+    theta = sindy_library_first_order(z, poly_order=2)
     xi = state.params['sindy_coefficients']
     mask = state.mask
 

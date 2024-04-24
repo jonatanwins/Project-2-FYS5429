@@ -38,75 +38,92 @@ def library_size(
     return l
 
 
-def sindy_library(
+def sindy_library_first_order(
     X: jnp.ndarray,
-    dX: jnp.ndarray,
     poly_order: int,
-    include_sine: bool = False,
-    order: int = 1,
 ) -> jnp.ndarray:
     """
-    Generate the library of functions for the given data X considering the order of X and its derivatives.
-
+    Generate the SINDy library for discovering first order ODEs.
+    
     Args:
         X: jnp.array of shape (m, n), m is the number of samples, n is the number of states
-        dX: jnp.array of shape (m, n), m is the number of samples, n is the number of derivative states
         poly_order: int, the maximum order of the polynomial terms
-        include_sine: bool, whether to include the sine terms
-        order: int, the maximum number of time derivatives to include in the library. 1 for just X,
-               2 for X and its first time derivative dX.
-
+    
     Returns:
         library: jnp.array of shape (m, l) where l is the size of the library, i.e the number of functions
         that we attempt to fit the data to
-
-    -The library is constructed by iterating through each polynomial order k from 1 to poly_order. For each order k,
-    we find all the combinations with replacement of the states and their derivatives. For each combination, we take the
-    product of the states and their derivatives and add it to the library. If order is 1, then we only consider the states
-    X, otherwise if order is 2, then we consider both X and dX.
-
-    -If include_sine is True, then we add the sine of each state to the library.
-
-    -The library is constructed by concatenating the states and their derivatives along the columns. The library is then
-    constructed by iterating through each polynomial order k and finding the product of the states and their derivatives
-    for each combination of states and derivatives. If include_sine is True, then we add the sine of each state to the library.
-
+    
     """
-
+     
     m, n = X.shape
-
-    if order == 1:
-        selected_X = X
-        multiplier = 1
-    elif order == 2:
-        selected_X = jnp.concatenate((X, dX), axis=1)
-        multiplier = 2
-    else:
-        raise ValueError("Unsupported order: {}".format(order))
-
-    num_features = multiplier * n
-    l = library_size(num_features, poly_order, include_sine, order == 2)
+    
+    num_features = n
+    l = library_size(num_features, poly_order, include_sine=False)
     library = jnp.ones((m, l))
     index = 1
 
     for i in range(num_features):
-        library[:, index] = selected_X[:, i]
+        library[:, index] = X[:, i]
         index += 1
 
     for current_order in range(2, poly_order + 1):
         for term_indices in combinations_with_replacement(
             range(num_features), current_order
         ):
-            product = jnp.prod(selected_X[:, term_indices], axis=1)
+            product = jnp.prod(X[:, term_indices], axis=1)
             library[:, index] = product
             index += 1
-
-    if include_sine:
-        for i in range(num_features):
-            library[:, index] = jnp.sin(selected_X[:, i])
-            index += 1
-
+    
     return library
+
+
+def sindy_library_second_order(
+    X: jnp.ndarray,
+    dX: jnp.ndarray,
+    poly_order: int,
+) -> jnp.ndarray:
+    """
+    Generate the SINDy library for discovering second order ODEs.
+
+    Args:
+        X: jnp.array of shape (m, n), m is the number of samples, n is the number of states
+        dX: jnp.array of shape (m, n), m is the number of samples, n is the number of states
+        poly_order: int, the maximum order of the polynomial terms
+    
+    Returns:
+        library: jnp.array of shape (m, l) where l is the size of the library, i.e the number of functions
+        that we attempt to fit the data to
+    """
+    m, n = X.shape
+    
+    X_prime = jnp.concatenate((X, dX), axis=1)
+    
+    num_features = n * 2
+    l = library_size(num_features, poly_order, include_sine=False)
+    library = jnp.ones((m, l))
+    index = 1
+
+    for i in range(num_features):
+        library[:, index] = X_prime[:, i]
+        index += 1
+
+    for current_order in range(2, poly_order + 1):
+        for term_indices in combinations_with_replacement(
+            range(num_features), current_order
+        ):
+            product = jnp.prod(X_prime[:, term_indices], axis=1)
+            library[:, index] = product
+            index += 1
+    
+    return library
+
+def add_sine(X, library: jnp.ndarray) -> jnp.ndarray:
+    
+    m, n = X.shape
+    num_features = n
+    for i in range(num_features):
+            library[:, index] = jnp.sin(X[:, i])
+            index += 1
 
 
 def sindy_fit(RHS, LHS, coefficient_threshold):
@@ -171,7 +188,7 @@ def sindy_simulate(x0, t, Xi, poly_order, include_sine):
 
     def f(x, t):
         return jnp.dot(
-            sindy_library(jnp.array(x).reshape((1, n)), poly_order, include_sine), Xi
+            sindy_library_first_order(jnp.array(x).reshape((1, n)), poly_order, include_sine), Xi
         ).reshape((n,))
 
     x = odeint(f, x0, t)

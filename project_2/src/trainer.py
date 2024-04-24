@@ -5,9 +5,8 @@ from typing import Any, Callable, Dict, Tuple
 import jax.numpy as jnp
 from flax.training import train_state
 from jax import value_and_grad
+from flax import nn
 
-# import our loss functions
-from loss import loss_fn
 
 
 class TrainState(train_state.TrainState):
@@ -22,9 +21,25 @@ def update_mask(coefficients, threshold=0.1):
 
 
 class Trainer(TrainerModule):
-    def __init__(self, model, train_loader, val_loader, optimizer, loss_fn, device, **kwargs):
-        super().__init__(model, train_loader, val_loader,
-                         optimizer, loss_fn, device, **kwargs)
+    def __init__(
+        self,
+        model_class: nn.Module,
+        model_hparams: Dict[str, Any],
+        optimizer_hparams: Dict[str, Any],
+        exmp_input: Any,
+        seed: int = 42,
+        logger_params: Dict[str, Any] = None,
+        enable_progress_bar: bool = True,
+        debug: bool = False,
+        check_val_every_n_epoch: int = 500,
+        update_mask_every_n_epoch: int = 500,
+        loss_fn: Callable[[TrainState, Any], Tuple[jnp.ndarray, Dict]] = lambda state, batch: (0, {})
+    ):
+        super().__init__(model_class, model_hparams, optimizer_hparams, exmp_input, seed, logger_params, enable_progress_bar, debug, check_val_every_n_epoch)
+        self.update_mask_every_n_epoch = update_mask_every_n_epoch
+        self.loss_fn = loss_fn
+        self.config.update({'update_mask_every_n_epoch': update_mask_every_n_epoch, 'loss_fn': loss_fn})
+
 
     def create_functions(self) -> Tuple[Callable[[TrainState, Any], Tuple[TrainState, Dict]],
                                         Callable[[TrainState, Any], Tuple[TrainState, Dict]]]:
@@ -42,7 +57,7 @@ class Trainer(TrainerModule):
         def train_step(state: TrainState,
                        batch: Any):
     
-            val_grad_fn = value_and_grad(loss_fn, has_aux=True)
+            val_grad_fn = value_and_grad(self.loss_fn, has_aux=True)
             (loss, metrics), grad = val_grad_fn(state, batch)
             optimizer = self.optimizer.apply_gradient(grad)
             state = state.apply(optimizer=optimizer)
@@ -54,7 +69,7 @@ class Trainer(TrainerModule):
         def eval_step(state: TrainState,
                       batch: Any):
             
-            (loss, metrics) = loss_fn(state, batch)
+            (loss, metrics) = self.loss_fn(state, batch)
 
             return metrics
 

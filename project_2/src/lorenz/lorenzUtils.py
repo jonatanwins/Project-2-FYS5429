@@ -1,3 +1,8 @@
+"""
+
+"""
+
+
 from sindy_utils import library_size
 import numpy as np
 from scipy.integrate import odeint
@@ -237,39 +242,4 @@ def generate_lorenz_data(
 
     return data
 
-class LorenzDataset_dx(Dataset):
-    def __init__(self, data):
-        self.x = data["x"]
-        self.dx = data["dx"]
-
-    def __len__(self):
-        return self.x.shape[0]
-
-    def __getitem__(self, idx):
-        return self.x[idx], self.dx[idx]
-
-
-class LorenzDataset_dz(Dataset):
-    def __init__(self, data):
-        self.z = data["z"]
-        self.dz = data["dz"]
-
-    def __len__(self):
-        return self.z.shape[0]
-
-    def __getitem__(self, idx):
-        return self.z[idx], self.dz[idx]
-
-class LorentzDataset_ddx(Dataset):
-    def __init__(self, data):
-        self.x = data["x"]
-        self.dx = data["dx"]
-        self.ddx = data["ddx"]
-
-    def __len__(self):
-        return self.x.shape[0]
-
-    def __getitem__(self, idx):
-        return self.x[idx], self.dx[idx], self.ddx[idx]
-    
     
