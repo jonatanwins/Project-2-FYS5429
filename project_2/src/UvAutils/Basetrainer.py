@@ -324,8 +324,6 @@ class TrainerModule:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-            if epoch_idx % self.update_mask_every_n_epoch == 0:
-                self.state.mask = update_mask(self.state.params['sindy_coefficients'])
         # Test best model if possible
         if test_loader is not None:
             self.load_model()

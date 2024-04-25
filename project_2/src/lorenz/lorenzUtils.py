@@ -1,5 +1,7 @@
 """
-
+Code written by Kathleen Champion and was part of 
+Data-driven discovery of coordinates and governing equations (Champion et al. 2019)
+and is publicly available at https://github.com/kpchamp/SindyAutoencoders
 """
 
 
@@ -8,7 +10,6 @@ import numpy as np
 from scipy.integrate import odeint
 from scipy.special import legendre, chebyt
 import sys
-from torch.utils.data import Dataset
 
 sys.path.append("../../src")
 

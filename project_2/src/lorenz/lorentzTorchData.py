@@ -23,7 +23,7 @@ class LorenzDataset_dx(Dataset):
         return self.x[idx], self.dx[idx]
 
 
-def get_lorenz_dataloader(n_ics, noise_strength=0, num_workers=4, batch_size=128):
+def get_lorenz_dataloader(n_ics, train=True, noise_strength=0, num_workers=4, batch_size=128):
     """
     Get a PyTorch DataLoader for the Lorenz dataset.
 
@@ -39,7 +39,13 @@ def get_lorenz_dataloader(n_ics, noise_strength=0, num_workers=4, batch_size=128
     """
     data = get_lorenz_data(n_ics, noise_strength)
     dataset = LorenzDataset_dx(data)
-    data_loader = create_data_loaders(dataset, batch_size=batch_size, num_workers=num_workers)
+    data_loader = create_data_loaders(dataset, train=train, batch_size=batch_size, num_workers=num_workers)[0]
     return data_loader
 
 
+if __name__ == "__main__":
+    #see what what one batch from the data loader looks like
+    data_loader = get_lorenz_dataloader(1, batch_size=20)
+    #get one batch from the data loader
+    x, dx = next(iter(data_loader))
+    print(x.shape, dx.shape)

@@ -37,17 +37,18 @@ class Decoder(nn.Module):
 class Autoencoder(nn.Module):
     input_dim: int
     latent_dim: int
-    library_dim: int
+    lib_size: int
     widths: list
     encoder: Encoder
     decoder: Decoder
+    train: bool = True
 
     def setup(self):
 
         self.sindy_coefficients = self.param(
             "sindy_coefficients",
            nn.initializers.constant(1.0),
-            (self.library_dim, self.latent_dim),
+            (self.lib_size, self.latent_dim),
         )
 
     def __call__(self, x):
@@ -68,12 +69,12 @@ if __name__ == "__main__":
     key = random.PRNGKey(0)
     input_dim = 128
     latent_dim = 2
-    library_dim = 3
+    lib_size = 3
     widths = [60, 40, 20]
     x = jnp.ones((1, input_dim))
     encoder = Encoder(input_dim, latent_dim, widths)
     decoder = Decoder(input_dim, latent_dim, widths)
-    model = Autoencoder(input_dim, latent_dim, library_dim, widths, encoder, decoder)
+    model = Autoencoder(input_dim, latent_dim, lib_size, widths, encoder, decoder)
     params = model.init(key, x)
     z, x_hat = model.apply(params, x)
     print(z.shape, x_hat.shape)
