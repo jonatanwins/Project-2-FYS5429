@@ -186,7 +186,7 @@ class TrainerModule:
         Returns:
           The initialized variable dictionary.
         """
-        return self.model.init(init_rng, *exmp_input, train=True)
+        return self.model.init(init_rng, exmp_input)
 
     def print_tabulate(self, exmp_input: Any):
         """
@@ -195,7 +195,7 @@ class TrainerModule:
         Args:
           exmp_input: An input to the model with which the shapes are inferred.
         """
-        print(self.model.tabulate(random.PRNGKey(0), *exmp_input, train=True))
+        print(self.model.tabulate(random.PRNGKey(0), exmp_input))
 
     def init_optimizer(self, num_epochs: int, num_steps_per_epoch: int):
         """
