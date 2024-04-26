@@ -339,7 +339,7 @@ class ThreeBodyData:
 
             # Select a random simulation
             random_index = random.randint(0, num_initial_conditions - 1)
-            simulation_data = data[:, random_index:random_index + 365] # 365 time steps
+            simulation_data = data[:, random_index:random_index + 364]
 
             positions = simulation_data[:9].reshape(3, 3, -1)
 
@@ -384,7 +384,7 @@ if __name__ == '__main__':
 
 
     # Specify the number of samples and the train/val/test split proportions
-    num_initial_conditions = 20  # Total number of different initial conditions aka simulations
+    num_initial_conditions = 10  # Total number of different initial conditions aka simulations
     train_split, val_split, test_split = 0.8, 0.1, 0.1
 
 
