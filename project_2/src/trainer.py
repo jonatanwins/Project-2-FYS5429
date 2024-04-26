@@ -7,12 +7,10 @@ from jax import value_and_grad
 from flax import linen as nn
 
 
-
 class TrainState(train_state.TrainState):
-    #batch_stats: Any = None
+    # batch_stats: Any = None
     rng: Any = None
     mask: jnp.ndarray = None
-
 
 
 def update_mask(coefficients, threshold=0.1):
@@ -32,16 +30,33 @@ class Trainer(TrainerModule):
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
         update_mask_every_n_epoch: int = 500,
-        loss_fn: Callable[[TrainState, Any], Tuple[jnp.ndarray, Dict]] = lambda state, batch: (0, {})
+        loss_fn: Callable[
+            [TrainState, Any], Tuple[jnp.ndarray, Dict]
+        ] = lambda state, batch: (0, {}),
     ):
-        super().__init__(model_class, model_hparams, optimizer_hparams, exmp_input, seed, logger_params, enable_progress_bar, debug, check_val_every_n_epoch)
+        super().__init__(
+            model_class,
+            model_hparams,
+            optimizer_hparams,
+            exmp_input,
+            seed,
+            logger_params,
+            enable_progress_bar,
+            debug,
+            check_val_every_n_epoch,
+        )
         self.update_mask_every_n_epoch = update_mask_every_n_epoch
         self.loss_fn = loss_fn
-        self.config.update({'update_mask_every_n_epoch': update_mask_every_n_epoch, 'loss_fn': loss_fn})
+        self.config.update(
+            {"update_mask_every_n_epoch": update_mask_every_n_epoch, "loss_fn": loss_fn}
+        )
 
-
-    def create_functions(self) -> Tuple[Callable[[TrainState, Any], Tuple[TrainState, Dict]],
-                                        Callable[[TrainState, Any], Tuple[TrainState, Dict]]]:
+    def create_functions(
+        self,
+    ) -> Tuple[
+        Callable[[TrainState, Any], Tuple[TrainState, Dict]],
+        Callable[[TrainState, Any], Tuple[TrainState, Dict]],
+    ]:
         """
         This function is used to create the train_step and eval_step functions which
         calculate the loss and update the model parameters ect. for one batch of data.
@@ -53,27 +68,24 @@ class Trainer(TrainerModule):
             train_step, eval_step
 
         """
-        def train_step(state: TrainState,
-                       batch: Any):
-    
+
+        def train_step(state: TrainState, batch: Any):
+
             val_grad_fn = value_and_grad(self.loss_fn, has_aux=True)
             (loss, metrics), grad = val_grad_fn(state, batch)
             optimizer = self.optimizer.apply_gradient(grad)
             state = state.apply(optimizer=optimizer)
 
-
-
             return state, metrics
 
-        def eval_step(state: TrainState,
-                      batch: Any):
-            
+        def eval_step(state: TrainState, batch: Any):
+
             (loss, metrics) = self.loss_fn(state, batch)
 
             return metrics
 
         return train_step, eval_step
-    
+
     def train_model(
         self,
         train_loader: Iterator,
@@ -115,9 +127,9 @@ class Trainer(TrainerModule):
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-            ##NEW LINES- only difference from UvA code in this method        
+            ##NEW LINES- only difference from UvA code in this method
             if epoch_idx % self.update_mask_every_n_epoch == 0:
-                self.state.mask = update_mask(self.state.params['sindy_coefficients'])
+                self.state.mask = update_mask(self.state.params["sindy_coefficients"])
             ##END NEW LINES
         # Test best model if possible
         if test_loader is not None:
@@ -129,4 +141,3 @@ class Trainer(TrainerModule):
         # Close logger
         self.logger.finalize("success")
         return best_eval_metrics
-    

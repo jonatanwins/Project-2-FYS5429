@@ -39,6 +39,7 @@ class TrainState(train_state.TrainState):
     # For example, rng to keep for init, dropout, etc.
     rng: Any = None
 
+
 def update_mask(coefficients, threshold=0.1):
     return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
 
@@ -56,7 +57,7 @@ class TrainerModule:
         enable_progress_bar: bool = True,
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
-        **kwargs
+        **kwargs,
     ):
         """
         A basic Trainer module summarizing most common training functionalities
@@ -84,7 +85,6 @@ class TrainerModule:
         self.debug = debug
         self.seed = seed
         self.check_val_every_n_epoch = check_val_every_n_epoch
-
 
         self.exmp_input = exmp_input
         # Set of hyperparameters to save

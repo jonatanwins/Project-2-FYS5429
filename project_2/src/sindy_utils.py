@@ -45,25 +45,25 @@ def sindy_library(
 ) -> jnp.ndarray:
     """
     Generate the SINDy library for discovering first order ODEs.
-    
+
     Args:
         X: jnp.array of shape (m, n), m is the number of samples, n is the number of states
         poly_order: int, the maximum order of the polynomial terms
-    
+
     Returns:
         library: jnp.array of shape (m, l) where l is the size of the library, i.e the number of functions
         that we attempt to fit the data to
-    
+
     """
-     
-    m, n = features.shape #num_samples, num_features
-    
+
+    m, n = features.shape  # num_samples, num_features
+
     num_features = n
     l = lib_size
     library = jnp.ones((m, l))
     index = 1
-        
-    library[:, index: index + num_features] = features
+
+    library[:, index : index + num_features] = features
 
     for current_order in range(2, poly_order + 1):
         for term_indices in combinations_with_replacement(
@@ -72,30 +72,29 @@ def sindy_library(
             product = jnp.prod(features[:, term_indices], axis=1)
             library[:, index] = product
             index += 1
-    
-    return library
 
+    return library
 
 
 def add_sine(X_prime, library: jnp.ndarray) -> jnp.ndarray:
     """
     Add sine functions to the library of functions.
-    
+
     Args:
         library_size: int, the size of the library before adding sine functions
         X_prime: The feature matrix. jnp.ndarray of shape (m, n), m is the number of samples, n is the number of states
         library: jnp.ndarray of shape (m, l), the library of functions
-        
+
     Returns:
         library: jnp.ndarray of shape (m, l), the library of functions with sine functions added
-            
+
     """
     lib_size = library.shape[1]
     num_features = X_prime.shape[1]
     index = int(lib_size - num_features)
     for i in range(num_features):
-            library[:, index] = jnp.sin(X_prime[:, i])
-            index += 1
+        library[:, index] = jnp.sin(X_prime[:, i])
+        index += 1
     return library
 
 
@@ -159,14 +158,17 @@ def sindy_simulate(x0, t, Xi, poly_order, include_sine):
 
     n = x0.size
     if include_sine:
-        sindy_library = lambda X_prime, poly_order, lib_size: add_sine(X_prime, sindy_library(X_prime, poly_order, lib_size))
-    
+        sindy_library = lambda X_prime, poly_order, lib_size: add_sine(
+            X_prime, sindy_library(X_prime, poly_order, lib_size)
+        )
+
     lib_size = library_size(n, poly_order, include_sine)
-    
+
     def f(x, t):
         return jnp.dot(
-            sindy_library(jnp.array(x).reshape((1, n)), poly_order,lib_size=lib_size), Xi
-    ).reshape((n,))
+            sindy_library(jnp.array(x).reshape((1, n)), poly_order, lib_size=lib_size),
+            Xi,
+        ).reshape((n,))
 
     x = odeint(f, x0, t)
     return x
