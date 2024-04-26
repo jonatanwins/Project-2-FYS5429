@@ -68,7 +68,6 @@ pyzmq==25.1.2
 rich==13.7.1
 scipy==1.12.0
 setuptools==68.2.2
--e git+https://github.com/jonatanwins/Project-2-FYS5429.git@233abac90b748ad9d6498b6401069eedaa7955a5#egg=SINDyAutoencoders&subdirectory=project_2
 six==1.16.0
 stack-data==0.6.3
 sympy==1.12
