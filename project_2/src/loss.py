@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import grad
-from sindy_utils import library_size, sindy_library
+from sindy_utils import library_size, sindy_library, add_sine
 
 
 def loss_recon(x, x_hat):
@@ -39,31 +39,44 @@ def loss_regularization(xi):
     return jnp.linalg.norm(xi, ord=1)
 
 
-def loss_fn(model, state, batch):
-    """
-    Total loss function
-    """
-    x, dx_dt = batch
-    encoder = model.encoder
-    decoder = model.decoder
-    z, x_hat = model.apply(state.params, x)
-    theta = sindy_library(z, dx_dt, poly_order=2, include_sine=False, include_constant=True)
-    xi = state.params['sindy_coefficients']
-    mask = state.mask
 
-    encoder_params = {'params': state.params['encoder']}
-    decoder_params = {'params': state.params['decoder']}
+def create_loss_fn(lib_size, poly_order: int, include_sine: bool = False):
+    #need to be able to have different libraries for different models
+    
+    if include_sine:
+        sindy_library = lambda features: add_sine(features, sindy_library(features, poly_order, lib_size))
+    else:
+        sindy_library = lambda features: sindy_library(features, poly_order, lib_size)
+        
+    def loss_fn(model, state, batch):
+        """
+        Total loss function
+        """
+        features, target = batch 
+        
+        encoder = model.encoder
+        decoder = model.decoder
+        
+        z, x_hat = model.apply(state.params, features)
+        
+        theta = sindy_library(z)
+        
+        xi = state.params['sindy_coefficients']
+        mask = state.mask
 
-    loss_reconstruction = loss_recon(x, x_hat)
+        encoder_params = {'params': state.params['encoder']}
+        decoder_params = {'params': state.params['decoder']}
 
-    loss_dynamics_dx_part = loss_dynamics_dx(decoder_params, decoder, x, dx_dt, theta, xi, mask)
-    loss_dynamics_dz_part = loss_dynamics_dz(encoder_params, encoder, x, dx_dt, theta, xi, mask)
-    loss_reg = loss_regularization(xi)
+        loss_reconstruction = loss_recon(features, x_hat)
 
-    total_loss = loss_reconstruction + loss_dynamics_dx_part + loss_dynamics_dz_part + loss_reg
-    return total_loss, {'loss': total_loss, 'reconstruction': loss_reconstruction, 'dynamics_dx': loss_dynamics_dx_part, 'dynamics_dz': loss_dynamics_dz_part, 'regularization': loss_reg}                                                                                                              
+        loss_dynamics_dx_part = loss_dynamics_dx(decoder_params, decoder, features, target, theta, xi, mask)
+        loss_dynamics_dz_part = loss_dynamics_dz(encoder_params, encoder, features, target, theta, xi, mask)
+        loss_reg = loss_regularization(xi)
 
-
+        total_loss = loss_reconstruction + loss_dynamics_dx_part + loss_dynamics_dz_part + loss_reg
+        return total_loss, {'loss': total_loss, 'reconstruction': loss_reconstruction, 'dynamics_dx': loss_dynamics_dx_part, 'dynamics_dz': loss_dynamics_dz_part, 'regularization': loss_reg}                                                                                                              
+    
+    return loss_fn
 
 # %% [markdown]
 

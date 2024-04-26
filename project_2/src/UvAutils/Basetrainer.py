@@ -56,8 +56,7 @@ class TrainerModule:
         enable_progress_bar: bool = True,
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
-        update_mask_every_n_epoch: int = 500,
-        **kwargs,
+        **kwargs
     ):
         """
         A basic Trainer module summarizing most common training functionalities
@@ -85,7 +84,7 @@ class TrainerModule:
         self.debug = debug
         self.seed = seed
         self.check_val_every_n_epoch = check_val_every_n_epoch
-        self.update_mask_every_n_epoch = update_mask_every_n_epoch
+
 
         self.exmp_input = exmp_input
         # Set of hyperparameters to save
@@ -187,7 +186,7 @@ class TrainerModule:
         Returns:
           The initialized variable dictionary.
         """
-        return self.model.init(init_rng, *exmp_input, train=True)
+        return self.model.init(init_rng, exmp_input)
 
     def print_tabulate(self, exmp_input: Any):
         """
@@ -196,7 +195,7 @@ class TrainerModule:
         Args:
           exmp_input: An input to the model with which the shapes are inferred.
         """
-        print(self.model.tabulate(random.PRNGKey(0), *exmp_input, train=True))
+        print(self.model.tabulate(random.PRNGKey(0), exmp_input))
 
     def init_optimizer(self, num_epochs: int, num_steps_per_epoch: int):
         """
@@ -325,8 +324,6 @@ class TrainerModule:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-            if epoch_idx % self.update_mask_every_n_epoch == 0:
-                self.state.mask = update_mask(self.state.params['sindy_coefficients'])
         # Test best model if possible
         if test_loader is not None:
             self.load_model()
