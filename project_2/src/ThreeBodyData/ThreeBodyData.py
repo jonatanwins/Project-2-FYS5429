@@ -336,11 +336,10 @@ class ThreeBodyData:
         for dataset in datasets:
             # Load dataset
             data = np.load(f'ThreeBodyDataset_{dataset}.npy')
-
+            print('data', data.shape)
             # Select a random simulation
-            random_index = random.randint(0, num_initial_conditions - 1)
-            simulation_data = data[:, random_index:random_index + 364]
-
+            random_index = random.randint(0, num_initial_conditions - 1) * 365
+            simulation_data = data[:, random_index:random_index + 365]
             positions = simulation_data[:9].reshape(3, 3, -1)
 
             # Plot animation
@@ -389,7 +388,7 @@ if __name__ == '__main__':
 
 
     SECONDS_PER_DAY = 86400
-    t_span = (0, 365.25 * SECONDS_PER_DAY)
+    t_span = (0, 365 * SECONDS_PER_DAY)
     num_points = 365
 
     high_dim = False
