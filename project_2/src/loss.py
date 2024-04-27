@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import grad
+from jax import grad, jacobian
 from sindy_utils import library_size, sindy_library, add_sine
 
 
@@ -18,7 +18,7 @@ def loss_dynamics_dx(params, decoder, z, dx_dt, theta, xi, mask):
     def psi(z, params):
         return decoder.apply(params, z)
 
-    grad_psi = grad(psi, argnums=1)
+    grad_psi = jacobian(psi, argnums=1)
 
     return jnp.mean(
         jnp.linalg.norm(dx_dt - jnp.dot(grad_psi(params, z), theta @ mask * xi), axis=1)
@@ -34,7 +34,7 @@ def loss_dynamics_dz(params, encoder, x, dx_dt, theta, xi, mask):
     def phi(x, params):
         return encoder.apply(params, x)
 
-    grad_phi = grad(phi, argnums=1)
+    grad_phi = jacobian(phi, argnums=1)
 
     return jnp.mean(
         jnp.linalg.norm(jnp.dot(grad_phi(params, x), dx_dt) - theta @ mask * xi, axis=1)

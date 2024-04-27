@@ -88,9 +88,10 @@ class TrainerModule:
 
         self.exmp_input = exmp_input
         # Set of hyperparameters to save
+        json_model_hparams = self.json_serializable(copy(model_hparams))
         self.config = {
             "model_class": model_class.__name__,
-            "model_hparams": model_hparams,
+            "model_hparams": json_model_hparams,
             "optimizer_hparams": optimizer_hparams,
             "logger_params": logger_params,
             "enable_progress_bar": self.enable_progress_bar,
@@ -106,7 +107,22 @@ class TrainerModule:
         self.init_logger(logger_params)
         self.create_jitted_functions()
         self.init_model(exmp_input)
+    
+    def json_serializable(self, obj:dict):
+        """Method for converting flax nn.modules to JSON serializable objects.
 
+        Args:
+            obj (dict): Dictionary containing flax nn.module objects.
+        
+        returns
+        """
+        for key, value in obj.items():
+            if isinstance(value, nn.Module):
+                obj[key] = str(value) #use str special method to get the string representation of the object
+            elif isinstance(value, dict):
+                obj[key] = self.json_serializable(value)
+        return obj
+    
     def init_logger(self, logger_params: Optional[Dict] = None):
         """
         Initializes a logger and creates a logging directory.
