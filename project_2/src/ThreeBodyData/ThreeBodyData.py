@@ -394,20 +394,11 @@ class ThreeBodyData:
         datasets = ["train", "val", "test"]
         for dataset in datasets:
             # Load dataset
-<<<<<<< HEAD
             data = np.load(f'ThreeBodyDataset_{dataset}.npy')
             print('data', data.shape)
             # Select a random simulation
             random_index = random.randint(0, num_initial_conditions - 1) * 365
             simulation_data = data[:, random_index:random_index + 365]
-=======
-            data = np.load(f"ThreeBodyDataset_{dataset}.npy")
-
-            # Select a random simulation
-            random_index = random.randint(0, num_initial_conditions - 1)
-            simulation_data = data[:, random_index : random_index + 364]
-
->>>>>>> aaa9c9470c09a0728acadadbbcc824cc399dfe0b
             positions = simulation_data[:9].reshape(3, 3, -1)
 
             # Plot animation
