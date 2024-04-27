@@ -11,7 +11,6 @@ contourpy==1.2.0
 cycler==0.12.1
 debugpy==1.8.1
 decorator==5.1.1
-etils==1.8.0
 executing==2.0.1
 filelock==3.13.4
 flax==0.8.2
@@ -62,13 +61,11 @@ pyparsing==3.1.2
 python-dateutil==2.9.0.post0
 pytorch-lightning==2.2.1
 pytz==2024.1
-pywin32==306
 PyYAML==6.0.1
 pyzmq==25.1.2
 rich==13.7.1
 scipy==1.12.0
 setuptools==68.2.2
--e git+https://github.com/jonatanwins/Project-2-FYS5429.git@233abac90b748ad9d6498b6401069eedaa7955a5#egg=SINDyAutoencoders&subdirectory=project_2
 six==1.16.0
 stack-data==0.6.3
 sympy==1.12
