@@ -5,11 +5,11 @@ import jax.numpy as jnp
 from flax.training import train_state
 from jax import value_and_grad
 from flax import linen as nn
+from jax import random
 
 
 class TrainState(train_state.TrainState):
-    # batch_stats: Any = None
-    rng: Any = None
+    rng: Any = None,
     mask: jnp.ndarray = None
 
 
@@ -30,9 +30,7 @@ class Trainer(TrainerModule):
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
         update_mask_every_n_epoch: int = 500,
-        loss_fn: Callable[
-            [TrainState, Any], Tuple[jnp.ndarray, Dict]
-        ] = lambda state, batch: (0, {}),
+        loss_fn: Callable = lambda params, batch, model, mask: (0, None)
     ):
         super().__init__(
             model_class,
@@ -54,8 +52,8 @@ class Trainer(TrainerModule):
     def create_functions(
         self,
     ) -> Tuple[
-        Callable[[TrainState, Any], Tuple[TrainState, Dict]],
-        Callable[[TrainState, Any], Tuple[TrainState, Dict]],
+        Callable[[TrainState, Tuple], Tuple[TrainState, Tuple]],
+        Callable[[TrainState, Tuple], Tuple[TrainState, Tuple]],
     ]:
         """
         This function is used to create the train_step and eval_step functions which
@@ -69,75 +67,22 @@ class Trainer(TrainerModule):
 
         """
 
-        def train_step(state: TrainState, batch: Any):
+        def train_step(state: TrainState, batch: Tuple):
 
-            val_grad_fn = value_and_grad(self.loss_fn, has_aux=True)
-            (loss, metrics), grad = val_grad_fn(state, batch)
-            optimizer = self.optimizer.apply_gradient(grad)
-            state = state.apply(optimizer=optimizer)
+            def loss_fn(params): return self.loss_fn(params,
+                                                     batch, self.model, state.mask)
+
+            val_grad_fn = value_and_grad(loss_fn, has_aux=True)
+            (loss, metrics), grads = val_grad_fn(state.params)
+            state = state.apply_gradients(grads=grads)
 
             return state, metrics
 
         def eval_step(state: TrainState, batch: Any):
 
-            (loss, metrics) = self.loss_fn(state, batch)
+            (loss, metrics) = self.loss_fn(
+                state.params, batch, self.model, state.mask)
 
             return metrics
 
         return train_step, eval_step
-
-    def train_model(
-        self,
-        train_loader: Iterator,
-        val_loader: Iterator,
-        test_loader: Optional[Iterator] = None,
-        num_epochs: int = 500,
-    ) -> Dict[str, Any]:
-        """
-        Starts a training loop for the given number of epochs.
-
-        Args:
-          train_loader: Data loader of the training set.
-          val_loader: Data loader of the validation set.
-          test_loader: If given, best model will be evaluated on the test set.
-          num_epochs: Number of epochs for which to train the model.
-
-        Returns:
-          A dictionary of the train, validation and evt. test metrics for the
-          best model on the validation set.
-        """
-        # Create optimizer and the scheduler for the given number of epochs
-        self.init_optimizer(num_epochs, len(train_loader))
-        # Prepare training loop
-        self.on_training_start()
-        best_eval_metrics = None
-        for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-            train_metrics = self.train_epoch(train_loader)
-            self.logger.log_metrics(train_metrics, step=epoch_idx)
-            self.on_training_epoch_end(epoch_idx)
-            # Validation every N epochs
-            if epoch_idx % self.check_val_every_n_epoch == 0:
-                eval_metrics = self.eval_model(val_loader, log_prefix="val/")
-                self.on_validation_epoch_end(epoch_idx, eval_metrics, val_loader)
-                self.logger.log_metrics(eval_metrics, step=epoch_idx)
-                self.save_metrics(f"eval_epoch_{str(epoch_idx).zfill(3)}", eval_metrics)
-                # Save best model
-                if self.is_new_model_better(eval_metrics, best_eval_metrics):
-                    best_eval_metrics = eval_metrics
-                    best_eval_metrics.update(train_metrics)
-                    self.save_model(step=epoch_idx)
-                    self.save_metrics("best_eval", eval_metrics)
-            ##NEW LINES- only difference from UvA code in this method
-            if epoch_idx % self.update_mask_every_n_epoch == 0:
-                self.state.mask = update_mask(self.state.params["sindy_coefficients"])
-            ##END NEW LINES
-        # Test best model if possible
-        if test_loader is not None:
-            self.load_model()
-            test_metrics = self.eval_model(test_loader, log_prefix="test/")
-            self.logger.log_metrics(test_metrics, step=epoch_idx)
-            self.save_metrics("test", test_metrics)
-            best_eval_metrics.update(test_metrics)
-        # Close logger
-        self.logger.finalize("success")
-        return best_eval_metrics

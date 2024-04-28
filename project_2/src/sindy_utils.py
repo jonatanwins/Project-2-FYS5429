@@ -63,14 +63,14 @@ def sindy_library(
     library = jnp.ones((m, l))
     index = 1
 
-    library[:, index : index + num_features] = features
+    library.at[:, index: index + num_features].set(features)
 
     for current_order in range(2, poly_order + 1):
         for term_indices in combinations_with_replacement(
             range(num_features), current_order
         ):
             product = jnp.prod(features[:, term_indices], axis=1)
-            library[:, index] = product
+            library.at[:, index].set(product)
             index += 1
 
     return library
@@ -158,7 +158,7 @@ def sindy_simulate(x0, t, Xi, poly_order, include_sine):
 
     n = x0.size
     if include_sine:
-        sindy_library = lambda X_prime, poly_order, lib_size: add_sine(
+        def sindy_library(X_prime, poly_order, lib_size): return add_sine(
             X_prime, sindy_library(X_prime, poly_order, lib_size)
         )
 
@@ -166,7 +166,8 @@ def sindy_simulate(x0, t, Xi, poly_order, include_sine):
 
     def f(x, t):
         return jnp.dot(
-            sindy_library(jnp.array(x).reshape((1, n)), poly_order, lib_size=lib_size),
+            sindy_library(jnp.array(x).reshape((1, n)),
+                          poly_order, lib_size=lib_size),
             Xi,
         ).reshape((n,))
 

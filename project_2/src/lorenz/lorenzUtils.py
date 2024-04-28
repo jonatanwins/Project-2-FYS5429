@@ -8,7 +8,7 @@ and is publicly available at https://github.com/kpchamp/SindyAutoencoders
 from sindy_utils import library_size
 import numpy as np
 from scipy.integrate import odeint
-from scipy.special import legendre, chebyt
+from scipy.special import legendre
 import sys
 
 sys.path.append("../../src")
@@ -138,7 +138,7 @@ def generate_lorenz_data(
 
     n_ics = ics.shape[0]
     n_steps = t.size
-    dt = t[1] - t[0]
+    # dt = t[1] - t[0]
 
     d = 3
     z = np.zeros((n_ics, n_steps, d))
@@ -187,7 +187,8 @@ def generate_lorenz_data(
                 x[i, j] += x4[i, j] + x5[i, j] + x6[i, j]
 
             dx[i, j] = (
-                modes[0] * dz[i, j, 0] + modes[1] * dz[i, j, 1] + modes[2] * dz[i, j, 2]
+                modes[0] * dz[i, j, 0] + modes[1] *
+                dz[i, j, 1] + modes[2] * dz[i, j, 2]
             )
             if not linear:
                 dx[i, j] += (
@@ -242,5 +243,3 @@ def generate_lorenz_data(
     data["sindy_coefficients"] = sindy_coefficients.astype(np.float32)
 
     return data
-
-    

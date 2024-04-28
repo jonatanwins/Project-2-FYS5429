@@ -32,11 +32,7 @@ from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 
 
 class TrainState(train_state.TrainState):
-    # A simple extension of TrainState to also include batch statistics
-    # If a model has no batch statistics, it is None
-    batch_stats: Any = None
-    # You can further extend the TrainState by any additional part here
-    # For example, rng to keep for init, dropout, etc.
+    mask: jnp.ndarray = None
     rng: Any = None
 
 
@@ -107,22 +103,23 @@ class TrainerModule:
         self.init_logger(logger_params)
         self.create_jitted_functions()
         self.init_model(exmp_input)
-    
-    def json_serializable(self, obj:dict):
+
+    def json_serializable(self, obj: dict):
         """Method for converting flax nn.modules to JSON serializable objects.
 
         Args:
             obj (dict): Dictionary containing flax nn.module objects.
-        
+
         returns
         """
         for key, value in obj.items():
             if isinstance(value, nn.Module):
-                obj[key] = str(value) #use str special method to get the string representation of the object
+                # use str special method to get the string representation of the object
+                obj[key] = str(value)
             elif isinstance(value, dict):
                 obj[key] = self.json_serializable(value)
         return obj
-    
+
     def init_logger(self, logger_params: Optional[Dict] = None):
         """
         Initializes a logger and creates a logging directory.
@@ -146,7 +143,8 @@ class TrainerModule:
         # Create logger object
         logger_type = logger_params.get("logger_type", "TensorBoard").lower()
         if logger_type == "tensorboard":
-            self.logger = TensorBoardLogger(save_dir=log_dir, version=version, name="")
+            self.logger = TensorBoardLogger(
+                save_dir=log_dir, version=version, name="")
         elif logger_type == "wandb":
             """"""
             self.logger = WandbLogger(
@@ -176,7 +174,8 @@ class TrainerModule:
         model_rng = random.PRNGKey(self.seed)
         model_rng, init_rng = random.split(model_rng)
         exmp_input = (
-            [exmp_input] if not isinstance(exmp_input, (list, tuple)) else exmp_input
+            [exmp_input] if not isinstance(
+                exmp_input, (list, tuple)) else exmp_input
         )
         # Run model initialization
         variables = self.run_model_init(exmp_input, init_rng)
@@ -185,10 +184,10 @@ class TrainerModule:
             step=0,
             apply_fn=self.model.apply,
             params=variables["params"],
-            batch_stats=variables.get("batch_stats"),
             rng=model_rng,
             tx=None,
             opt_state=None,
+            mask=variables['params']['sindy_coefficients'],
         )
 
     def run_model_init(self, exmp_input: Any, init_rng: Any) -> Dict:
@@ -249,15 +248,16 @@ class TrainerModule:
         if (
             opt_class == optax.sgd and "weight_decay" in hparams
         ):  # wd is integrated in adamw
-            transf.append(optax.add_decayed_weights(hparams.pop("weight_decay", 0.0)))
+            transf.append(optax.add_decayed_weights(
+                hparams.pop("weight_decay", 0.0)))
         optimizer = optax.chain(*transf, opt_class(lr_schedule, **hparams))
         # Initialize training state
         self.state = TrainState.create(
             apply_fn=self.state.apply_fn,
             params=self.state.params,
-            batch_stats=self.state.batch_stats,
             tx=optimizer,
             rng=self.state.rng,
+            mask=self.state.mask,
         )
 
     def create_jitted_functions(self):
@@ -331,15 +331,22 @@ class TrainerModule:
             # Validation every N epochs
             if epoch_idx % self.check_val_every_n_epoch == 0:
                 eval_metrics = self.eval_model(val_loader, log_prefix="val/")
-                self.on_validation_epoch_end(epoch_idx, eval_metrics, val_loader)
+                self.on_validation_epoch_end(
+                    epoch_idx, eval_metrics, val_loader)
                 self.logger.log_metrics(eval_metrics, step=epoch_idx)
-                self.save_metrics(f"eval_epoch_{str(epoch_idx).zfill(3)}", eval_metrics)
+                self.save_metrics(
+                    f"eval_epoch_{str(epoch_idx).zfill(3)}", eval_metrics)
                 # Save best model
                 if self.is_new_model_better(eval_metrics, best_eval_metrics):
                     best_eval_metrics = eval_metrics
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
+
+          # update mask
+            if epoch_idx % self.update_mask_every_n_epoch == 0:
+                self.state.mask = update_mask(
+                    self.state.params["sindy_coefficients"])
         # Test best model if possible
         if test_loader is not None:
             self.load_model()
@@ -510,7 +517,7 @@ class TrainerModule:
         """
         checkpoints.save_checkpoint(
             ckpt_dir=self.log_dir,
-            target={"params": self.state.params, "batch_stats": self.state.batch_stats},
+            target={"params": self.state.params},
             step=step,
             overwrite=True,
         )
@@ -519,11 +526,11 @@ class TrainerModule:
         """
         Loads model parameters and batch statistics from the logging directory.
         """
-        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=None)
+        state_dict = checkpoints.restore_checkpoint(
+            ckpt_dir=self.log_dir, target=None)
         self.state = TrainState.create(
             apply_fn=self.model.apply,
             params=state_dict["params"],
-            batch_stats=state_dict["batch_stats"],
             # Optimizer will be overwritten when training starts
             tx=self.state.tx if self.state.tx else optax.sgd(0.1),
             rng=self.state.rng,
@@ -538,8 +545,6 @@ class TrainerModule:
           The model with parameters and evt. batch statistics bound to it.
         """
         params = {"params": self.state.params}
-        if self.state.batch_stats:
-            params["batch_stats"] = self.state.batch_stats
         return self.model.bind(params)
 
     @classmethod

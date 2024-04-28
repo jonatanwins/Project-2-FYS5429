@@ -47,7 +47,7 @@ class Autoencoder(nn.Module):
         self.sindy_coefficients = self.param(
             "sindy_coefficients",
             nn.initializers.constant(1.0),
-            (self.lib_size, self.latent_dim),
+            (self.latent_dim, self.lib_size),
         )
 
     def __call__(self, x):
@@ -71,18 +71,19 @@ if __name__ == "__main__":
     x = jnp.ones((1, input_dim))
     encoder = Encoder(input_dim, latent_dim, widths)
     decoder = Decoder(input_dim, latent_dim, widths)
-    model = Autoencoder(input_dim, latent_dim, lib_size, widths, encoder, decoder)
+    model = Autoencoder(input_dim, latent_dim, lib_size,
+                        widths, encoder, decoder)
     a = str(encoder)
-    # params = model.init(key, x)
-    # z, x_hat = model.apply(params, x)
-    # print(z.shape, x_hat.shape)
-    # # lets have a look at the params
-    # # print(type(params))
-    # print(tree_map(jnp.shape, params))
-    # print("=================================================")
-    # # print(tree_map(jnp.shape, params['params']))
-    # encoder_params = {"params": params["params"]["encoder"]}
-    # print(tree_map(jnp.shape, encoder_params))
-    # print(type(encoder_params))
-    # z = model.encoder.apply(encoder_params, x)
-    # print(z)
+    params = model.init(key, x)
+    z, x_hat = model.apply(params, x)
+    print(z.shape, x_hat.shape)
+    # lets have a look at the params
+    print(type(params))
+    print(tree_map(jnp.shape, params))
+    print("=================================================")
+    # print(tree_map(jnp.shape, params['params']))
+    encoder_params = {"params": params["params"]["encoder"]}
+    print(tree_map(jnp.shape, encoder_params))
+    print(type(encoder_params))
+    z = model.encoder.apply(encoder_params, x)
+    print(z)
