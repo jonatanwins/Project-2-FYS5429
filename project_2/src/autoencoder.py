@@ -47,7 +47,7 @@ class Autoencoder(nn.Module):
         self.sindy_coefficients = self.param(
             "sindy_coefficients",
             nn.initializers.constant(1.0),
-            (self.latent_dim, self.lib_size),
+            (self.lib_size, self.latent_dim),
         )
 
     def __call__(self, x):

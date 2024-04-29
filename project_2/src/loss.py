@@ -3,9 +3,30 @@ from jax import jacobian
 from sindy_utils import sindy_library, add_sine
 from typing import Tuple
 from jax import Array
-from type_utils import NestedModelLayers, ModelLayers
+from type_utils import ModelLayers, ModelParams
 from flax import linen as nn
 from jax import tree_map
+from jax import vmap
+
+
+def jacobian_mult(jacobian_slice, z_dot_or_x_dot):
+    """
+    This function could be implemented wrong, but is simply a way 
+    to multiply the jacobian and the with a single x_dot or z_dot point to achive
+    the correct dimentions. I don't know if it's correct
+
+    Args:
+        jacobian_slice (_type_): _description_
+        z_dot_slice (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    return jnp.sum(jnp.einsum('ijk,k->ij', jacobian_slice, z_dot_or_x_dot), axis=-1)
+
+
+vectorized_jacobian_mult = vmap(
+    jacobian_mult, in_axes=(0, 0), out_axes=0)
 
 
 def loss_recon(x: Array, x_hat: Array) -> Array:
@@ -24,7 +45,7 @@ def loss_recon(x: Array, x_hat: Array) -> Array:
 # params in a dictionary of collections
 
 
-def loss_dynamics_dx(params: NestedModelLayers,
+def loss_dynamics_dx(params: ModelParams,
                      decoder: nn.module,
                      z: Array, dx_dt: Array,
                      theta: Array,
@@ -48,21 +69,19 @@ def loss_dynamics_dx(params: NestedModelLayers,
 
     """
 
-    def psi(z, params):
-        print("PSIIIIII")
-        print(params)
+    def psi(params, z):
         return decoder.apply({"params": params}, z)
 
-    grad_psi = jacobian(psi, argnums=1)
+    jacobian_psi = jacobian(psi, argnums=1)
 
     return jnp.mean(
-        jnp.linalg.norm(dx_dt - jnp.dot(grad_psi(params, z),
-                        theta @ mask * xi), axis=1)
+        jnp.linalg.norm(dx_dt - vectorized_jacobian_mult(jacobian_psi(params, z),
+                        theta @ (mask * xi)), axis=1)
         ** 2
     )
 
 
-def loss_dynamics_dz(params: NestedModelLayers,
+def loss_dynamics_dz(params: ModelParams,
                      encoder: nn.module,
                      x: Array,
                      dx_dt: Array,
@@ -87,14 +106,14 @@ def loss_dynamics_dz(params: NestedModelLayers,
 
     """
 
-    def phi(x, params):
+    def phi(params, x):
         return encoder.apply({"params": params}, x)
 
-    grad_phi = jacobian(phi, argnums=1)
+    jacobian_phi = jacobian(phi, argnums=1)
 
     return jnp.mean(
-        jnp.linalg.norm(jnp.dot(grad_phi(params, x), dx_dt) -
-                        theta @ mask * xi, axis=1)
+        jnp.linalg.norm(vectorized_jacobian_mult(jacobian_phi(params, x), dx_dt) -
+                        theta @ (mask * xi), axis=1)
         ** 2
     )
 
@@ -155,10 +174,6 @@ def create_loss_fn(lib_size: int, poly_order: int, include_sine: bool = False):
         encoder = autoencoder.encoder
         decoder = autoencoder.decoder
 
-        print("Inside loss function")
-        print(tree_map(jnp.shape, params))
-        # print(features)
-
         z, x_hat = autoencoder.apply({"params": params}, features)
 
         theta = selected_sindy_library(z)
@@ -171,7 +186,7 @@ def create_loss_fn(lib_size: int, poly_order: int, include_sine: bool = False):
         loss_reconstruction = loss_recon(features, x_hat)
 
         loss_dynamics_dx_part = loss_dynamics_dx(
-            decoder_params, decoder, features, target, theta, xi, mask
+            decoder_params, decoder, z, target, theta, xi, mask
         )
         loss_dynamics_dz_part = loss_dynamics_dz(
             encoder_params, encoder, features, target, theta, xi, mask
@@ -234,7 +249,7 @@ if __name__ == "__main__":
     decoder = Decoder(input_dim=input_dim,
                       latent_dim=latent_dim, widths=[32, 32])
     autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, lib_size=lib_size, widths=[
-                              32, 32], encoder=encoder, decoder=decoder)
+        32, 32], encoder=encoder, decoder=decoder)
 
     # create some random data
     key, subkey = random.split(key)
@@ -264,7 +279,6 @@ if __name__ == "__main__":
         rng=state.rng,
         mask=state.mask
     )
-    print(tree_map(jnp.shape, state.params))
 
     loss_fn = create_loss_fn(lib_size, 3, include_sine=False)
 
