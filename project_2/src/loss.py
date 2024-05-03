@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import jacobian
-from sindy_utils import sindy_library, add_sine
+from sindy_utils import create_sindy_library, add_sine
 from typing import Tuple
 from jax import Array
 from type_utils import ModelLayers, ModelParams
@@ -14,9 +14,22 @@ def jacobian_mult(jacobian_slice, z_dot_or_x_dot):
     This function could be implemented wrong, but is simply a way 
     to multiply the jacobian and the with a single x_dot or z_dot point to achive
     the correct dimentions. I don't know if it's correct
+    
+    The z_dot case:
+    
+    -z_dot will have shape (m, k) where m is the batch size and k is 
+    the dimention of z (3 in lorenz case)
+    -The jacobian will have shape (m, n, m, k) n is the dimention of x 
+    (128 in lorenz case)
+    The reason for this is that we have the partial derivative of each 
+    x_i^j (0 <= i <= n, 0 <= j <= m) with respect to each z_l^s 
+    (0<= l <= k, 0 <= s <= m).  So we have m*n*m*k.
+    
+    This function takes in one of these derivatives (m,n,) in the jacobian and one z_dot
+    
 
     Args:
-        jacobian_slice (_type_): _description_
+        jacobian_slice Array: 
         z_dot_slice (_type_): _description_
 
     Returns:
@@ -131,7 +144,7 @@ def loss_regularization(xi: Array):
     return jnp.linalg.norm(xi, ord=1)
 
 
-def create_loss_fn(lib_size: int, poly_order: int, include_sine: bool = False):
+def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, batchsize:int=128):
     """
     Create a loss function for different sindy libraries
 
@@ -143,14 +156,8 @@ def create_loss_fn(lib_size: int, poly_order: int, include_sine: bool = False):
     Returns:
         Callable: Loss function
     """
-
-    if include_sine:
-        def selected_sindy_library(features): return add_sine(
-            features, sindy_library(features, poly_order, lib_size)
-        )
-    else:
-        def selected_sindy_library(features): return sindy_library(
-            features, poly_order, lib_size)
+    sindy_library = create_sindy_library(
+        poly_order, include_sine, batchsize)
 
     def loss_fn(params: ModelLayers,
                 batch: Tuple,
@@ -176,7 +183,7 @@ def create_loss_fn(lib_size: int, poly_order: int, include_sine: bool = False):
 
         z, x_hat = autoencoder.apply({"params": params}, features)
 
-        theta = selected_sindy_library(z)
+        theta = sindy_library(z)
 
         xi = params["sindy_coefficients"]
 
@@ -243,6 +250,8 @@ if __name__ == "__main__":
     input_dim = 128
     latent_dim = 3
     lib_size = library_size(3, 3)
+    poly_order = 3
+    
 
     encoder = Encoder(input_dim=input_dim,
                       latent_dim=latent_dim, widths=[32, 32])
@@ -280,7 +289,8 @@ if __name__ == "__main__":
         mask=state.mask
     )
 
-    loss_fn = create_loss_fn(lib_size, 3, include_sine=False)
+    loss_fn = create_loss_fn(poly_order, include_sine=False, batchsize=10)
+
 
     loss, losses = loss_fn(
         state.params, (features, target), autoencoder, state.mask)

@@ -1,5 +1,5 @@
 from flax import linen as nn
-
+from jax import numpy as jnp, Array
 
 class Encoder(nn.Module):
     input_dim: int
@@ -9,11 +9,11 @@ class Encoder(nn.Module):
     initializer: nn.initializers = nn.initializers.glorot_normal()
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, x: Array):
         for width in self.widths:
             x = nn.Dense(width, self.initializer)(x)
             x = self.activation(x)
-        z = nn.Dense(self.latent_dim)(x)
+        z = nn.Dense(self.latent_dim, self.initializer)(x)
         return z
 
 

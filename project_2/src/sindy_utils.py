@@ -1,7 +1,9 @@
 import jax.numpy as jnp
+from jax import vmap, jit
 from scipy.special import binom
 from scipy.integrate import odeint
-from itertools import combinations_with_replacement
+from itertools import combinations_with_replacement, product
+from functools import partial
 
 
 def library_size(
@@ -37,43 +39,64 @@ def library_size(
         l -= 1
     return l
 
+def create_sindy_library(poly_order: int, 
+                         include_sine: bool = False, 
+                         batchsize: int =128) -> jnp.ndarray:
+    
+    def polynomial(x, degree):
+        return jnp.prod(x ** degree)
+    
+    def polynomial_features(X, degrees):
+        all_polynomials = vmap(polynomial, in_axes=(None, 0))
+        
+        all_features = vmap(all_polynomials, in_axes=(0, None))
+        
+        return all_features(X, degrees)
+    
+    degrees = jnp.array(list(product(range(poly_order + 1), repeat=batchsize)))
+    sums = jnp.sum(degrees, axis=1)
+    degrees = degrees[sums <= poly_order]
 
-def sindy_library(
-    features: jnp.ndarray,
-    poly_order: int,
-    lib_size: int,
-) -> jnp.ndarray:
-    """
-    Generate the SINDy library for discovering first order ODEs.
+    def sindy_library(
+        features: jnp.ndarray
+    ) -> jnp.ndarray:
+        """
+        Generate the SINDy library for discovering first order ODEs.
 
-    Args:
-        X: jnp.array of shape (m, n), m is the number of samples, n is the number of states
-        poly_order: int, the maximum order of the polynomial terms
+        Args:
+            X: jnp.array of shape (m, n), m is the number of samples, n is the number of states
+            poly_order: int, the maximum order of the polynomial terms
 
-    Returns:
-        library: jnp.array of shape (m, l) where l is the size of the library, i.e the number of functions
-        that we attempt to fit the data to
+        Returns:
+            library: jnp.array of shape (m, l) where l is the size of the library, i.e the number of functions
+            that we attempt to fit the data to
 
-    """
+        """
+        return polynomial_features(features, degrees)
+    
+    if include_sine ==   True:
+        return lambda features: add_sine(features, sindy_library(features))
+    else:
+        return sindy_library
+    
+"""
+m, n = features.shape  # num_samples, num_features
 
-    m, n = features.shape  # num_samples, num_features
+num_features = n
+l = lib_size
+library = jnp.ones((m, l))
+index = 1
 
-    num_features = n
-    l = lib_size
-    library = jnp.ones((m, l))
-    index = 1
+library = library.at[:, index: index + num_features].set(features)
 
-    library.at[:, index: index + num_features].set(features)
-
-    for current_order in range(2, poly_order + 1):
-        for term_indices in combinations_with_replacement(
-            range(num_features), current_order
-        ):
-            product = jnp.prod(features[:, term_indices], axis=1)
-            library.at[:, index].set(product)
-            index += 1
-
-    return library
+for current_order in range(2, poly_order + 1):
+    for term_indices in combinations_with_replacement(
+        range(num_features), current_order
+    ):  
+        product = jnp.prod(features[:, term_indices], axis=1)
+        library = library.at[:, index].set(product)
+        index += 1
+"""
 
 
 def add_sine(X_prime, library: jnp.ndarray) -> jnp.ndarray:
