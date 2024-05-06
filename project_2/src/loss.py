@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import jacobian
+from jax import jacobian, grad
 from sindy_utils import create_sindy_library, add_sine
 from typing import Tuple
 from jax import Array
@@ -18,7 +18,7 @@ def jacobian_mult(jacobian_slice, z_dot_or_x_dot):
     The z_dot case:
     
     -z_dot will have shape (m, k) where m is the batch size and k is 
-    the dimention of z (3 in lorenz case)
+    the dimention of z (2 in lorenz case)
     -The jacobian will have shape (m, n, m, k) n is the dimention of x 
     (128 in lorenz case)
     The reason for this is that we have the partial derivative of each 
@@ -85,13 +85,14 @@ def loss_dynamics_dx(params: ModelParams,
     def psi(params, z):
         return decoder.apply({"params": params}, z)
 
-    jacobian_psi = jacobian(psi, argnums=1)
+    jacobian_fn = vmap(jacobian(psi, argnums = 1), in_axes = (None, 0))
 
-    return jnp.mean(
-        jnp.linalg.norm(dx_dt - vectorized_jacobian_mult(jacobian_psi(params, z),
-                        theta @ (mask * xi)), axis=1)
-        ** 2
-    )
+    dpsi_dt = jnp.einsum('ijk,ik->ij', jacobian_fn(params, z), theta @ (mask * xi))
+    
+    #print(f"We find the shape of the dpsidt function to be {dpsi_dt.shape}")
+    #jacobian_phi = jacobian(phi, argnums=1)
+
+    return jnp.mean(jnp.linalg.norm(dx_dt - dpsi_dt, axis=1)** 2)
 
 
 def loss_dynamics_dz(params: ModelParams,
@@ -121,9 +122,47 @@ def loss_dynamics_dz(params: ModelParams,
 
     def phi(params, x):
         return encoder.apply({"params": params}, x)
+    
+    jacobian_fn = vmap(jacobian(phi, argnums = 1), in_axes = (None, 0))
 
-    jacobian_phi = jacobian(phi, argnums=1)
+    dphi_dt = jnp.einsum('ijk,ik->ij', jacobian_fn(params, x), dx_dt)
+    
+    #print(f"We find the shape of the dphidt function to be {dphi_dt.shape}")
+    #jacobian_phi = jacobian(phi, argnums=1)
 
+    return jnp.mean(jnp.linalg.norm(dphi_dt -theta @ (mask * xi), axis=1)** 2)
+
+def loss_dynamics_dz_test(params: ModelParams,
+                     encoder: nn.module,
+                     x: Array,
+                     dx_dt: Array,
+                     theta: Array,
+                     xi: Array,
+                     mask: Array
+                     ):
+    """
+    Loss for the dynamics in z
+
+    arguments:
+        params {NestedModelLayers} -- Model parameters
+        encoder {nn.module} -- Encoder
+        x {Array} -- Original data
+        dx_dt {Array} -- Time derivative of x
+        theta {Array} -- SINDy library
+        xi {Array} -- SINDy coefficients
+        mask {Array} -- Mask
+
+    Returns:
+        Array -- Loss dynamics in z
+
+    """
+
+    def phi(params, x):
+        return encoder.apply({"params": params}, x)
+
+    jacobian_phi = grad(phi, argnums=1)
+    #print(f"We have the x shape to be {x.shape}")
+    #print(f"We have the dxdt shape to be {dx_dt.shape}")
     return jnp.mean(
         jnp.linalg.norm(vectorized_jacobian_mult(jacobian_phi(params, x), dx_dt) -
                         theta @ (mask * xi), axis=1)
@@ -144,7 +183,7 @@ def loss_regularization(xi: Array):
     return jnp.linalg.norm(xi, ord=1)
 
 
-def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, batchsize:int=128):
+def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, batchsize:int=120):
     """
     Create a loss function for different sindy libraries
 
@@ -182,8 +221,10 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         decoder = autoencoder.decoder
 
         z, x_hat = autoencoder.apply({"params": params}, features)
+        #print(f"We have the shape of z to be {z.shape}")
 
         theta = sindy_library(z)
+        #print(f"We have the shape of theta to be {theta.shape}")
 
         xi = params["sindy_coefficients"]
 
@@ -191,6 +232,7 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         decoder_params = params["decoder"]
 
         loss_reconstruction = loss_recon(features, x_hat)
+        #print(f"The reconstruction loss is {loss_reconstruction}, with type {type(loss_reconstruction)}")
 
         loss_dynamics_dx_part = loss_dynamics_dx(
             decoder_params, decoder, z, target, theta, xi, mask
@@ -198,6 +240,7 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         loss_dynamics_dz_part = loss_dynamics_dz(
             encoder_params, encoder, features, target, theta, xi, mask
         )
+
         loss_reg = loss_regularization(xi)
 
         total_loss = (
