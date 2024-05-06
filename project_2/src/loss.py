@@ -157,7 +157,7 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         Callable: Loss function
     """
     sindy_library = create_sindy_library(
-        poly_order, include_sine, batchsize)
+        poly_order, include_sine, states=latent_dim)
 
     def loss_fn(params: ModelLayers,
                 batch: Tuple,
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         mask=state.mask
     )
 
-    loss_fn = create_loss_fn(poly_order, include_sine=False, batchsize=10)
+    loss_fn = create_loss_fn(latent_dim,poly_order, include_sine=False, batchsize=10)
 
 
     loss, losses = loss_fn(

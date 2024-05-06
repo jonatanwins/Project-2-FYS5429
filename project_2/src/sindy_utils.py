@@ -48,6 +48,7 @@ def library_size(
 
 def create_sindy_library(poly_order: int, 
                          include_sine: bool = False, 
+                         states: int = 3,
                          batchsize: int =128) -> jnp.ndarray:
     
     def polynomial(x, degree):
@@ -60,9 +61,10 @@ def create_sindy_library(poly_order: int,
         
         return all_features(X, degrees)
     
-    degrees = jnp.array(list(product(range(poly_order + 1), repeat=batchsize)))
+    degrees = jnp.array(list(product(range(poly_order + 1), repeat=states)))
     sums = jnp.sum(degrees, axis=1)
     degrees = degrees[sums <= poly_order]
+    #print(degrees.shape)
 
     def sindy_library(
         features: jnp.ndarray
@@ -252,3 +254,11 @@ def sindy_simulate_order2(x0, dx0, t, Xi, poly_order, include_sine):
         jnp.concatenate((x0, dx0)), t, Xi_order1, poly_order, include_sine
     )
     return x
+
+if __name__ == "__main__":
+    from jax import random
+    key = random.PRNGKey(1)
+    X = random.uniform(key, shape = (14,3))
+    my_function = create_sindy_library(poly_order = 3, include_sine = False, states=3)
+
+    print(my_function(X).shape)
