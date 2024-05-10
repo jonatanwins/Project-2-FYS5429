@@ -132,9 +132,8 @@ class TrainerModule:
         # Determine logging directory
         log_dir = logger_params.get("log_dir", None)
         if not log_dir:
-            base_log_dir = logger_params.get("base_log_dir", "checkpoints/")
+            log_dir  = logger_params.get("base_log_dir", "checkpoints/")
             # Prepare logging
-            log_dir = os.path.join(base_log_dir, self.config["model_class"])
             if "logger_name" in logger_params:
                 log_dir = os.path.join(log_dir, logger_params["logger_name"])
             version = None
@@ -345,8 +344,9 @@ class TrainerModule:
 
           # update mask
             if epoch_idx % self.update_mask_every_n_epoch == 0:
-                self.state.mask = update_mask(
+                new_mask = update_mask(
                     self.state.params["sindy_coefficients"])
+                self.state = self.state.replace(mask=new_mask)
         # Test best model if possible
         if test_loader is not None:
             self.load_model()
@@ -469,8 +469,18 @@ class TrainerModule:
           filename: Name of the metrics file without folders and postfix.
           metrics: A dictionary of metrics to save in the file.
         """
-        with open(os.path.join(self.log_dir, f"metrics/{filename}.json"), "w") as f:
+
+        metrics_dir = os.path.join(self.log_dir, "metrics")
+        os.makedirs(metrics_dir, exist_ok=True)
+
+        file_path = os.path.join(metrics_dir, f"{filename}.json")
+        print(f"Saving metrics to: {file_path}")
+
+        with open(file_path, "w") as f:
             json.dump(metrics, f, indent=4)
+
+        # with open(os.path.join(self.log_dir, f"metrics/{filename}.json"), "w") as f:
+        #     json.dump(metrics, f, indent=4)
 
     def on_training_start(self):
         """
@@ -514,9 +524,14 @@ class TrainerModule:
 
         Args:
           step: Index of the step to save the model at, e.g. epoch.
+          
         """
+                
+        # Ensure the directory is absolute
+        absolute_log_dir = os.path.abspath(self.log_dir)
+
         checkpoints.save_checkpoint(
-            ckpt_dir=self.log_dir,
+            ckpt_dir=absolute_log_dir,
             target={"params": self.state.params},
             step=step,
             overwrite=True,

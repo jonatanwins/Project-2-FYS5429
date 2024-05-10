@@ -1,108 +1,89 @@
 import jax.numpy as jnp
-from jax import jacobian, grad
+from jax import jacobian, grad, vmap
 from sindy_utils import create_sindy_library, add_sine
 from typing import Tuple
 from jax import Array
 from type_utils import ModelLayers, ModelParams
 from flax import linen as nn
 from jax import tree_map
-from jax import vmap
 
 
-def loss_recon(x: Array, x_hat: Array) -> Array:
+def loss_recon_single(x: Array, x_hat: Array) -> Array:
     """
-    Reconstruction loss
+    Reconstruction loss for a single pair of data points.
 
     Arguments:
-        x {Array} -- Original data
-        x_hat {Array} -- Reconstructed data
+        x {Array} -- Single original data point
+        x_hat {Array} -- Single reconstructed data point
 
     Returns:
-        Array -- Reconstruction loss
+        Array -- Reconstruction loss for a single point
     """
-    return jnp.mean(jnp.linalg.norm(x - x_hat, axis=1) ** 2)
-
-# params in a dictionary of collections
+    return jnp.linalg.norm(x - x_hat) ** 2
 
 
-def loss_dynamics_dx(params: ModelParams,
-                     decoder: nn.module,
-                     z: Array, dx_dt: Array,
-                     theta: Array,
-                     xi: Array,
-                     mask: Array
-                     ):
+def loss_dynamics_dx_single(params: ModelParams,
+                            decoder: nn.Module,
+                            z: Array, dx_dt: Array,
+                            theta: Array,
+                            xi: Array,
+                            mask: Array) -> Array:
     """
-    Loss for the dynamics in x
+    Loss for the dynamics in x for a single data point.
 
     Arguments:
-        params {NestedModelLayers} -- Model parameters
-        decoder {nn.module} -- Decoder
-        z {Array} -- Latent space
-        dx_dt {Array} -- Time derivative of x
-        theta {Array} -- SINDy library
+        params {ModelParams} -- Model parameters
+        decoder {nn.Module} -- Decoder
+        z {Array} -- Single latent vector
+        dx_dt {Array} -- Single time derivative of x
+        theta {Array} -- SINDy library row
         xi {Array} -- SINDy coefficients
         mask {Array} -- Mask
 
-    Returns
-        Array -- Loss dynamics in x
-
+    Returns:
+        Array -- Loss dynamics in x for a single point
     """
-
     def psi(params, z):
         return decoder.apply({"params": params}, z)
 
-    jacobian_fn = vmap(jacobian(psi, argnums = 1), in_axes = (None, 0))
-
-    dpsi_dt = jnp.einsum('ijk,ik->ij', jacobian_fn(params, z), theta @ (mask * xi))
-    
-    #print(f"We find the shape of the dpsidt function to be {dpsi_dt.shape}")
-    #jacobian_phi = jacobian(phi, argnums=1)
-
-    return jnp.mean(jnp.linalg.norm(dx_dt - dpsi_dt, axis=1)** 2)
+    jacobian_fn = jacobian(psi, argnums=1)
+    dpsi_dt = jacobian_fn(params, z) @ (theta @ (mask * xi))
+    return jnp.linalg.norm(dx_dt - dpsi_dt) ** 2
 
 
-def loss_dynamics_dz(params: ModelParams,
-                     encoder: nn.module,
-                     x: Array,
-                     dx_dt: Array,
-                     theta: Array,
-                     xi: Array,
-                     mask: Array
-                     ):
+def loss_dynamics_dz_single(params: ModelParams,
+                            encoder: nn.Module,
+                            x: Array,
+                            dx_dt: Array,
+                            theta: Array,
+                            xi: Array,
+                            mask: Array) -> Array:
     """
-    Loss for the dynamics in z
+    Loss for the dynamics in z for a single data point.
 
-    arguments:
-        params {NestedModelLayers} -- Model parameters
-        encoder {nn.module} -- Encoder
-        x {Array} -- Original data
-        dx_dt {Array} -- Time derivative of x
-        theta {Array} -- SINDy library
+    Arguments:
+        params {ModelParams} -- Model parameters
+        encoder {nn.Module} -- Encoder
+        x {Array} -- Single original data point
+        dx_dt {Array} -- Single time derivative of x
+        theta {Array} -- SINDy library row
         xi {Array} -- SINDy coefficients
         mask {Array} -- Mask
 
     Returns:
-        Array -- Loss dynamics in z
-
+        Array -- Loss dynamics in z for a single point
     """
-
     def phi(params, x):
         return encoder.apply({"params": params}, x)
-    
-    jacobian_fn = vmap(jacobian(phi, argnums = 1), in_axes = (None, 0))
 
-    dphi_dt = jnp.einsum('ijk,ik->ij', jacobian_fn(params, x), dx_dt)
-    
-    #print(f"We find the shape of the dphidt function to be {dphi_dt.shape}")
-    #jacobian_phi = jacobian(phi, argnums=1)
-
-    return jnp.mean(jnp.linalg.norm(dphi_dt -theta @ (mask * xi), axis=1)** 2)
+    jacobian_fn = jacobian(phi, argnums=1)
+    dphi_dt = jacobian_fn(params, x) @ dx_dt
+    return jnp.linalg.norm(dphi_dt - theta @ (mask * xi)) ** 2
 
 
-def loss_regularization(xi: Array):
+def loss_regularization(xi: Array) -> Array:
     """
-    Regularization loss
+    Regularization loss.
 
     Arguments:
         xi {Array} -- SINDy coefficients
@@ -113,13 +94,13 @@ def loss_regularization(xi: Array):
     return jnp.linalg.norm(xi, ord=1)
 
 
-def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, batchsize:int=120):
+def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False):
     """
-    Create a loss function for different sindy libraries
+    Create a loss function for different sindy libraries.
 
     Args:
-        lib_size (int): number of columns in sindy library (different functions)
-        poly_order (int): polynomial order
+        latent_dim (int): Latent dimension
+        poly_order (int): Polynomial order
         include_sine (bool, optional): Include sine functions in the library. Defaults to False.
 
     Returns:
@@ -130,20 +111,19 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
 
     def loss_fn(params: ModelLayers,
                 batch: Tuple,
-                autoencoder: nn.module,
+                autoencoder: nn.Module,
                 mask: Array):
         """
-        Total loss function
+        Total loss function.
 
-        args:
-            params: Model parameters
-            autoencoder: Autoencoder model
-            batch: Tuple of features and target
-            mask: Mask
+        Args:
+            params {ModelLayers} -- Model parameters
+            autoencoder {nn.Module} -- Autoencoder model
+            batch {Tuple} -- Tuple of features and target
+            mask {Array} -- Mask
 
-        returns:
+        Returns:
             Tuple: Total loss and dictionary of losses
-
         """
         features, target = batch
 
@@ -151,25 +131,25 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         decoder = autoencoder.decoder
 
         z, x_hat = autoencoder.apply({"params": params}, features)
-        #print(f"We have the shape of z to be {z.shape}")
-
         theta = sindy_library(z)
-        #print(f"We have the shape of theta to be {theta.shape}")
-
         xi = params["sindy_coefficients"]
 
         encoder_params = params["encoder"]
         decoder_params = params["decoder"]
 
-        loss_reconstruction = loss_recon(features, x_hat)
-        #print(f"The reconstruction loss is {loss_reconstruction}, with type {type(loss_reconstruction)}")
+        # Vectorize individual losses using vmap
+        loss_recon_fn = vmap(loss_recon_single, in_axes=(0, 0))
+        loss_dynamics_dx_fn = vmap(loss_dynamics_dx_single, in_axes=(None, None, 0, 0, 0, None, None))
+        loss_dynamics_dz_fn = vmap(loss_dynamics_dz_single, in_axes=(None, None, 0, 0, 0, None, None))
 
-        loss_dynamics_dx_part = loss_dynamics_dx(
+        # Compute losses across the entire batch
+        loss_reconstruction = jnp.mean(loss_recon_fn(features, x_hat))
+        loss_dynamics_dx_part = jnp.mean(loss_dynamics_dx_fn(
             decoder_params, decoder, z, target, theta, xi, mask
-        )
-        loss_dynamics_dz_part = loss_dynamics_dz(
+        ))
+        loss_dynamics_dz_part = jnp.mean(loss_dynamics_dz_fn(
             encoder_params, encoder, features, target, theta, xi, mask
-        )
+        ))
 
         loss_reg = loss_regularization(xi)
 
@@ -179,6 +159,7 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
             + loss_dynamics_dz_part
             + loss_reg
         )
+
         return total_loss, {
             "loss": total_loss,
             "reconstruction": loss_reconstruction,
@@ -188,25 +169,6 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         }
 
     return loss_fn
-
-
-# %% [markdown]
-
-# Reconstruction Loss (`Lrecon`)
-
-# $$ L_{ \text{recon} } = \frac{1}{m} \sum_{i=1}^{m}  ||x_i - \psi(\phi(x_i))||^2_2  $$
-
-# Dynamics in `x` Loss (`Ldx/dt`)
-# $$ L_{dx/dt} = \frac{1}{m} \sum_{i=1}^{m} \left\| \dot{x}_i - (\nabla_z \psi(\phi(x_i))) \Theta(\phi(x_i))^T \Xi
-# \right\|^2_2 $$
-
-# Dynamics in `z` Loss (`Ldz/dt`)
-# $$ L_{dz/dt} = \frac{1}{m} \sum_{i=1}^{m} \left\| \nabla_x \phi(x_i) \dot{x}_i - \Theta(\phi(x_i))^T \Xi
-# \right\|^2_2 $$
-
-# Regularization Loss (`Lreg`)
-# $$ L_{\text{reg}} = \frac{1}{pd} \| \Xi \|_1 $$
-
 
 if __name__ == "__main__":
     # lets thest the loss function
@@ -262,7 +224,7 @@ if __name__ == "__main__":
         mask=state.mask
     )
 
-    loss_fn = create_loss_fn(latent_dim,poly_order, include_sine=False, batchsize=10)
+    loss_fn = create_loss_fn(latent_dim,poly_order, include_sine=False)
 
 
     loss, losses = loss_fn(
