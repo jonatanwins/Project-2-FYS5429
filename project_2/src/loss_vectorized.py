@@ -1,11 +1,10 @@
 import jax.numpy as jnp
-from jax import jacobian, grad, vmap
-from sindy_utils import create_sindy_library, add_sine
+from jax import jacobian, vmap
+from sindy_utils import create_sindy_library
 from typing import Tuple
 from jax import Array
 from type_utils import ModelLayers, ModelParams
 from flax import linen as nn
-from jax import tree_map
 
 
 def loss_recon_single(x: Array, x_hat: Array) -> Array:

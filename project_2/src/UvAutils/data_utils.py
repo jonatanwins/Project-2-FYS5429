@@ -41,8 +41,8 @@ def create_data_loaders(
       seed: Seed to initialize the workers and shuffling with.
     """
     loaders = []
-    if not isinstance(train, (list, tuple)):
-        train = [train for _ in datasets]
+    if isinstance(train, bool):
+        train = [train] * len(datasets)
     for dataset, is_train in zip(datasets, train):
         loader = data.DataLoader(
             dataset,

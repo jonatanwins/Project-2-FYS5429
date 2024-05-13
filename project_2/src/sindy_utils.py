@@ -1,9 +1,9 @@
 import jax.numpy as jnp
-from jax import vmap, jit
+from jax import vmap
 from scipy.special import binom
 from scipy.integrate import odeint
-from itertools import combinations_with_replacement, product
-from functools import partial
+from itertools import product
+from jax import Array
 
 
 def library_size(
@@ -23,14 +23,7 @@ def library_size(
         l: int, the size of the library
 
     -Iterates through each polynomial order and finds the number of
-    combinations with replacement
-    ( n + k - 1 choose k) for the case where n = 3.
-    Each state could for instance represent aspacial cooardinate x, y, z.
-    Where for each polynomial order k,
-    we want to find x^a * y^b * z^c where a + b + c = k.
-    This is equivalent to finding the number of
-    ways to distribute k identical balls into n distinct boxes. This is given
-    by the binomial coefficient (n + k - 1 choose k).
+    combinations with replacement ( n + k - 1 choose k)
 
     -If use_sine is True, then it adds n sine terms.
 
@@ -46,10 +39,31 @@ def library_size(
         l -= 1
     return l
 
+def polynomial_degrees(n_states: int, poly_order: int) -> Array:
+    """
+    Generate the polynomial orders for the SINDy model.
+
+    Args:
+        n: int, the number of states
+        poly_order: int, the maximum order of the polynomial terms
+
+    Returns:
+        degrees: jnp.array of shape (l, n) where l is the size of the library
+        and n is the number of states
+
+    -Generates all possible combinations of polynomial orders for the given
+    number of states and polynomial order.
+    """
+    degrees = jnp.array(list(product(range(poly_order + 1), repeat=n_states)))
+    sums = jnp.sum(degrees, axis=1)
+    degrees = degrees[sums <= poly_order]
+    return degrees
+
+
 def create_sindy_library(poly_order: int, 
                          include_sine: bool = False, 
-                         states: int = 3,
-                         batchsize: int =128) -> jnp.ndarray:
+                         n_states: int = 3,
+                         ) -> jnp.ndarray:
     
     def polynomial(x, degree):
         return jnp.prod(x ** degree)
@@ -61,82 +75,50 @@ def create_sindy_library(poly_order: int,
         
         return all_features(X, degrees)
     
-    degrees = jnp.array(list(product(range(poly_order + 1), repeat=states)))
-    sums = jnp.sum(degrees, axis=1)
-    degrees = degrees[sums <= poly_order]
-    #print(degrees.shape)
+    degrees = polynomial_degrees(n_states, poly_order)
 
     def sindy_library(
-        features: jnp.ndarray
-    ) -> jnp.ndarray:
+        features: Array
+    ) -> Array:
         """
-        Generate the SINDy library for discovering first order ODEs.
+        Construct the library of functions for the SINDy model.
 
         Args:
-            X: jnp.array of shape (m, n), m is the number of samples, n is the number of states
-            poly_order: int, the maximum order of the polynomial terms
-
+            features: jnp.ndarray, the input features
+        
         Returns:
-            library: jnp.array of shape (m, l) where l is the size of the library, i.e the number of functions
-            that we attempt to fit the data to
+            library: jnp.ndarray, the library of functions
 
         """
         return polynomial_features(features, degrees)
     
-    if include_sine ==   True:
+    if include_sine ==  True:
         return lambda features: add_sine(features, sindy_library(features))
-    else:
-        return sindy_library
     
-"""
-m, n = features.shape  # num_samples, num_features
-
-num_features = n
-l = lib_size
-library = jnp.ones((m, l))
-index = 1
-
-library = library.at[:, index: index + num_features].set(features)
-
-for current_order in range(2, poly_order + 1):
-    for term_indices in combinations_with_replacement(
-        range(num_features), current_order
-    ):  
-        product = jnp.prod(features[:, term_indices], axis=1)
-        library = library.at[:, index].set(product)
-        index += 1
-"""
+    return sindy_library
 
 
-def add_sine(X_prime, library: jnp.ndarray) -> jnp.ndarray:
+
+def add_sine(features: Array, library: Array) -> Array:
     """
-    Add sine functions to the library of functions.
+    Add sine terms to the library of functions.
 
     Args:
-        library_size: int, the size of the library before adding sine functions
-        X_prime: The feature matrix. jnp.ndarray of shape (m, n),
-            m is the number of samples, n is the number of states
-        library: jnp.ndarray of shape (m, l), the library of functions
-
-    Returns:
-        library: jnp.ndarray of shape (m, l),
-            the library of functions with sine functions added
-
+        features: jnp.ndarray, the input features
+        library: jnp.ndarray, the existing library
+    
+    returns:
+        library: jnp.ndarray, the library with sine terms added
     """
-    lib_size = library.shape[1]
-    num_features = X_prime.shape[1]
-    index = int(lib_size - num_features)
-    for i in range(num_features):
-        library[:, index] = jnp.sin(X_prime[:, i])
-        index += 1
+    sine = jnp.sin(features)
+    library = jnp.concatenate([library, sine], axis=1)
     return library
 
 
 def sindy_fit(RHS, LHS, coefficient_threshold):
     """
 
-    Fit the SINDy model coefficients using a least squares fit with
-        thresholding sparsity.
+    Fit the SINDy model coefficients using sequential thresholding.
 
     Args:
         RHS: jnp.ndarray, right-hand side of the SINDy model
@@ -144,21 +126,10 @@ def sindy_fit(RHS, LHS, coefficient_threshold):
         LHS: jnp.ndarray, left-hand side of the SINDy model
             - matrix of time derivatives
         coefficient_threshold: float, the threshold below which
-            coefficients are considered to be zero
+            coefficients are set to zero
 
     Returns:
-        Xi: jnp.ndarray, sparse matrix of coefficients where coefficients
-            below the thresholdare zeroed out. These coefficients represent
-            the terms in the governing equations
-            associated with the library of functions
-
-    - This function performs sparse regression using a thresholding method.
-        Starting with aninitial least squares solution,
-        it zeroes out coefficients with magnitude below the specified
-        threshold and then refines the remaining non-zero coefficients by
-        performing least squares again on the non-zero elements.
-        The zeroing and refinement steps are repeated multiple times to
-        enhance sparsity in the solution.
+        Xi: jnp.ndarray, the SINDy model coefficients
 
     """
     m, n = LHS.shape
@@ -193,19 +164,10 @@ def sindy_simulate(x0, t, Xi, poly_order, include_sine):
     Returns:
         x: jnp.ndarray, array of model states over time points
 
-    - Utilizes the `odeint` function from scipy.integrate to simulate the
-        system of ODEs represented by the function library and sparse
-        coefficients found by SINDy.
-    - Constructs a function representing the right-hand side of the ODEs by
-        taking the dot product of the function library applied to the current
-        state with the Xi coefficients.
     """
 
     n = x0.size
-    if include_sine:
-
-        def sindy_library(X_prime, poly_order, lib_size):
-            return add_sine(X_prime, sindy_library(X_prime, poly_order, lib_size))
+    sindy_library = create_sindy_library(poly_order, include_sine, n)
 
     lib_size = library_size(n, poly_order, include_sine)
 
@@ -236,10 +198,6 @@ def sindy_simulate_order2(x0, dx0, t, Xi, poly_order, include_sine):
         x: jnp.ndarray, the simulated states of the system
             at the requested time points
 
-    - It prepares an extended set of SINDy coefficients to account
-        for both the state and its derivatives.
-    - Uses the `sindy_simulate` function internally to perform the simulation
-        with the expanded initial conditions and coefficients.
     """
 
     n = 2 * x0.size
@@ -258,7 +216,13 @@ def sindy_simulate_order2(x0, dx0, t, Xi, poly_order, include_sine):
 if __name__ == "__main__":
     from jax import random
     key = random.PRNGKey(1)
-    X = random.uniform(key, shape = (14,3))
-    my_function = create_sindy_library(poly_order = 3, include_sine = False, states=3)
+    X = jnp.array([1,2,3,4]).reshape(2,-1)
+    print(X)
+    my_function = create_sindy_library(poly_order = 2, include_sine = False, n_states=2)
+    print(my_function(X))
+    print(polynomial_degrees(2,2))
 
-    print(my_function(X).shape)
+    # # print(my_function(X).shape)
+    # print(polynomial_degrees(3, 3))
+
+

@@ -10,7 +10,8 @@ import os
 from typing import Any, Optional, Tuple, Iterator, Dict, Callable
 import json
 import time
-from tqdm.auto import tqdm
+#from tqdm.auto import tqdm
+from tqdm import tqdm
 from copy import copy
 from collections import defaultdict
 
@@ -323,7 +324,7 @@ class TrainerModule:
         # Prepare training loop
         self.on_training_start()
         best_eval_metrics = None
-        for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
+        for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"): #, leave=False):
             train_metrics = self.train_epoch(train_loader)
             self.logger.log_metrics(train_metrics, step=epoch_idx)
             self.on_training_epoch_end(epoch_idx)
@@ -373,7 +374,8 @@ class TrainerModule:
         metrics = defaultdict(float)
         num_train_steps = len(train_loader)
         start_time = time.time()
-        for batch in self.tracker(train_loader, desc="Training", leave=False):
+        for batch in train_loader:
+        #for batch in self.tracker(train_loader, desc="Training", leave=True):
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps

@@ -24,6 +24,7 @@ def plot_metrics(metrics: RunMetrics, metric_names: List[str], title: Optional[s
 
     plt.xlabel("Steps")
     plt.ylabel("Value")
+    plt.yscale("log")
     plt.title(title or "Metrics Plot")
     plt.legend()
     plt.grid(True)
@@ -64,6 +65,7 @@ def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Opt
 
     plt.xlabel("Steps")
     plt.ylabel("Value")
+    plt.yscale("log")
     plt.title(title or "Metrics Comparison")
     plt.legend()
     plt.grid(True)
@@ -76,7 +78,7 @@ def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Opt
     
     plt.show()
 
-    
+
 if __name__ == "__main__":
     plt.style.use("plot_settings.mplstyle")
     # Example usage
