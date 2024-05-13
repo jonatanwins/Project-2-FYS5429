@@ -1,49 +1,17 @@
+import os
 import matplotlib.pyplot as plt
-from tensorboard.backend.event_processing import event_accumulator
 from typing import List, Optional
-import plot_settings  # type: ignore 
+from metrics import RunMetrics  # type: ignore -goofy linitng issue
 
-
-
-
-class RunMetrics:
-    def __init__(self, log_dir: str):
-        self.log_dir = log_dir
-        self.ea = event_accumulator.EventAccumulator(
-            log_dir,
-            size_guidance={
-                event_accumulator.SCALARS: 0,
-                event_accumulator.IMAGES: 0,
-                event_accumulator.AUDIO: 0,
-                event_accumulator.HISTOGRAMS: 0,
-                event_accumulator.COMPRESSED_HISTOGRAMS: 0,
-            }
-        )
-        self.ea.Reload()
-        self.tags = self.ea.Tags()["scalars"]
-        self.metrics = self._fetch_metrics()
-
-    def _fetch_metrics(self):
-        metrics = {}
-        for tag in self.tags:
-            events = self.ea.Scalars(tag)
-            steps, values = zip(*[(e.step, e.value) for e in events])
-            metrics[tag] = {"steps": steps, "values": values}
-        return metrics
-
-    def __getattr__(self, name):
-        """Dynamically access metrics as attributes."""
-        if name in self.metrics:
-            return self.metrics[name]
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-
-def plot_metrics(metrics: RunMetrics, metric_names: List[str], title: Optional[str] = None):
-    """Plots the given metric(s) from a RunMetrics object.
-
+def plot_metrics(metrics: RunMetrics, metric_names: List[str], title: Optional[str] = None, save_figure: bool = False, save_path: Optional[str] = None):
+    """Plots and optionally saves the given metric(s) from a RunMetrics object.
+    
     Args:
         metrics (RunMetrics): RunMetrics object containing the metrics.
         metric_names (List[str]): List of metric names to plot.
         title (Optional[str]): Title of the plot.
+        save_figure (bool): If True, save the plot to the specified path or default path.
+        save_path (Optional[str]): Path to save the figure.
     """
     for name in metric_names:
         if hasattr(metrics, name):
@@ -59,16 +27,26 @@ def plot_metrics(metrics: RunMetrics, metric_names: List[str], title: Optional[s
     plt.title(title or "Metrics Plot")
     plt.legend()
     plt.grid(True)
+    
+    if save_figure:
+        save_path = save_path or "../../figures"
+        filename = title or "metrics_plot"
+        os.makedirs(save_path, exist_ok=True)
+        plt.savefig(os.path.join(save_path, f"{filename}.png"))
+    
     plt.show()
 
-def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Optional[List[str]] = None, title: Optional[str] = None):
-    """Plots the specified metric(s) across multiple runs.
 
+def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Optional[List[str]] = None, title: Optional[str] = None, save_figure: bool = False, save_path: Optional[str] = None):
+    """Plots and optionally saves the specified metric(s) across multiple runs.
+    
     Args:
         log_dirs (List[str]): List of directories containing the logs.
         metric_names (List[str]): List of metric names to plot.
         labels (Optional[List[str]]): Labels for each run.
         title (Optional[str]): Title of the plot.
+        save_figure (bool): If True, save the plot to the specified path or default path.
+        save_path (Optional[str]): Path to save the figure.
     """
     if labels is None:
         labels = [f"Run {i+1}" for i in range(len(log_dirs))]
@@ -89,19 +67,23 @@ def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Opt
     plt.title(title or "Metrics Comparison")
     plt.legend()
     plt.grid(True)
+    
+    if save_figure:
+        save_path = save_path or "../../figures"
+        filename = title or "multiple_metrics_plot"
+        os.makedirs(save_path, exist_ok=True)
+        plt.savefig(os.path.join(save_path, f"{filename}.png"))
+    
     plt.show()
 
+    
 if __name__ == "__main__":
+    plt.style.use("plot_settings.mplstyle")
     # Example usage
-    log_dir = "lorenz/checkpoints/Autoencoder/version_9"
+    log_dir = "../lorenz/checkpoints/version_0"
     metrics = RunMetrics(log_dir)
 
     # Plot a single run
-    plot_metrics(metrics, metric_names=["train_loss", "val_loss"], title="Loss Metrics")
+    plot_metrics(metrics, metric_names=["train/loss", "val/loss"], title="Loss Metrics")
 
-    # Plot multiple runs
-    log_dirs = [
-        "../lorenz/checkpoints/Autoencoder/version_8",
-        "../lorenz/checkpoints/Autoencoder/version_9"
-    ]
-    plot_multiple_runs(log_dirs, metric_names=["train_loss", "val_loss"], labels=["Version 9", "Version 10"], title="Loss Comparison")
+    #plot_multiple_runs(log_dirs, metric_names=["train/loss", "val/loss"], labels=["Version 9", "Version 10"], title="Loss Comparison")

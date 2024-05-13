@@ -1,6 +1,15 @@
 from tensorboard.backend.event_processing import event_accumulator
 
 class RunMetrics:
+    """
+    A class to load and access metrics from a TensorBoard log directory.
+
+    Attributes:
+        log_dir (str): The path to the directory containing the TensorBoard log files.
+        ea (EventAccumulator): An EventAccumulator object to load the events from the log directory.
+        tags (list): A list of tags for the scalars in the log directory.
+        metrics (dict): A dictionary containing the metrics loaded from the log directory.
+    """
     def __init__(self, log_dir):
         self.log_dir = log_dir
         self.ea = event_accumulator.EventAccumulator(
@@ -33,15 +42,15 @@ class RunMetrics:
 
 # Usage example
 if __name__ == "__main__":
-    log_dir = "../lorenz/checkpoints/Autoencoder/version_9"
+    log_dir = "../lorenz/checkpoints/version_0"
     
     metrics = RunMetrics(log_dir)
 
-    # Access metrics as attributes
-    try:
-        print(metrics.train_loss)
-    except AttributeError:
-        print("train_loss not found in metrics.")
-    
-    # Alternatively, access directly from the dictionary
-    print(metrics.metrics)
+   
+    print(metrics.metrics.keys())
+    for k in metrics.metrics:
+        print(f"Printing {k}")
+        print("============================================================================================================================================================")
+        print(metrics.metrics[k]['values'])
+        print("============================================================================================================================================================")
+        print("\n\n\n")

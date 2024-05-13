@@ -1,0 +1,15 @@
+# Set the default DPI
+figure.dpi: 300
+
+# LaTeX rendering with STIX font
+mathtext.fontset: stix
+font.family: STIXGeneral
+
+# Title sizes
+figure.titlesize: 20
+axes.titlesize: 16
+axes.labelsize: 14
+
+# Tick label sizes
+xtick.labelsize: 16
+ytick.labelsize: 16
