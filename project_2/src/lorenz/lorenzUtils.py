@@ -14,6 +14,13 @@ import sys
 sys.path.append("../../src")
 
 
+def lorenz(t, z, sigma=10, beta=8/3, rho=28):
+    x, y, z = z
+    dx = sigma * (y - x)
+    dy = x * (rho - z) - y
+    dz = x * y - beta * z
+    return [dx, dy, dz]
+
 def get_lorenz_data(n_ics, noise_strength=0):
     """
     Generate a set of Lorenz training data for multiple random initial conditions.
@@ -243,3 +250,9 @@ def generate_lorenz_data(
     data["sindy_coefficients"] = sindy_coefficients.astype(np.float32)
 
     return data
+
+
+if __name__ ==  "__main__":
+    # test the generate lorenz data function
+    data = get_lorenz_data(1)
+    print(data.keys())

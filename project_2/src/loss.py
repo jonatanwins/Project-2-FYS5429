@@ -113,7 +113,7 @@ def loss_regularization(xi: Array):
     return jnp.linalg.norm(xi, ord=1)
 
 
-def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, batchsize:int=120):
+def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, weights: tuple = (1, 1, 40, 1), batchsize: int = 128):
     """
     Create a loss function for different sindy libraries
 
@@ -121,12 +121,14 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         lib_size (int): number of columns in sindy library (different functions)
         poly_order (int): polynomial order
         include_sine (bool, optional): Include sine functions in the library. Defaults to False.
+        weights (tuple, optional): Weights for the loss functions. Defaults to (1, 1, 40, 1).
 
     Returns:
         Callable: Loss function
     """
     sindy_library = create_sindy_library(
-        poly_order, include_sine, states=latent_dim)
+        poly_order, include_sine, n_states=latent_dim)
+    recon_weight, dx_weight, dz_weight, reg_weight = weights
 
     def loss_fn(params: ModelLayers,
                 batch: Tuple,
@@ -172,12 +174,12 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         )
 
         loss_reg = loss_regularization(xi)
-
+        
         total_loss = (
-            loss_reconstruction
-            + loss_dynamics_dx_part
-            + loss_dynamics_dz_part
-            + loss_reg
+            recon_weight * loss_reconstruction
+            + dx_weight * loss_dynamics_dx_part
+            + dz_weight * loss_dynamics_dz_part
+            + reg_weight * loss_reg
         )
         return total_loss, {
             "loss": total_loss,

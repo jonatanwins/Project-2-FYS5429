@@ -213,14 +213,50 @@ def sindy_simulate_order2(x0, dx0, t, Xi, poly_order, include_sine):
     )
     return x
 
+
+def get_expression(xi: jnp.ndarray, n_states: int = 3, poly_order: int = 3, include_sine: bool = False):
+    """
+    Generate the expression for the SINDy model. MISSIG IMPLEMENTATION FOR SINE OR OTHER LIBRARY FUNCS
+    
+    Args:
+        xi: jnp.ndarray of shape (l, n) where l is the number of functions in the library and n is the number of states
+        poly_order: int, the maximum order of the polynomial terms
+        include_sine: bool, whether to include sine functions in the library
+        
+    Returns:
+        expression: callable function for the dynamics discovered by SINDy
+    """
+    def polynomial(x, degree):
+        return jnp.prod(x ** degree, axis=-1)
+    
+    poly_terms = polynomial_degrees(n_states=n_states, poly_order=poly_order)
+
+    # Only keep the necessary polynomial terms based on non-zero coefficients in xi
+    non_zero_indices = jnp.nonzero(xi)
+    unique_terms = jnp.unique(non_zero_indices[0])
+    required_poly_terms = poly_terms[unique_terms]
+
+    # Filter the non-zero coefficients
+    required_xi = xi[unique_terms, :]
+
+    # Vectorize the polynomial function over degrees using vmap
+    vectorized_polynomial = vmap(polynomial, in_axes=(None, 0))
+
+    def dynamics(x):
+        features = vectorized_polynomial(x, required_poly_terms).T
+        return features @ required_xi
+
+    return dynamics
+
+
 if __name__ == "__main__":
     from jax import random
     key = random.PRNGKey(1)
     X = jnp.array([1,2,3,4]).reshape(2,-1)
-    print(X)
+    #print(X)
     my_function = create_sindy_library(poly_order = 2, include_sine = False, n_states=2)
-    print(my_function(X))
-    print(polynomial_degrees(2,2))
+    #print(my_function(X))
+    print(polynomial_degrees(2,2).shape)
 
     # # print(my_function(X).shape)
     # print(polynomial_degrees(3, 3))
