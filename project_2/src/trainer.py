@@ -1,5 +1,9 @@
-import sys
-sys.path.append('../')
+"""
+Large parts of this module was created by Phillip Lippe (Revision cf18eb5d, 2022), and is part of 
+Guide 4: Research Projects with JAX https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/guide4/Research_Projects_with_JAX.html
+which is part of UVA DEEP LEARNING COURSE https://uvadlc.github.io/
+"""
+
 from autoencoder import Autoencoder, Encoder, Decoder
 
 import os
@@ -19,80 +23,113 @@ import jax.numpy as jnp
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
+from loss import create_loss_fn
+from sindy_utils import library_size
+
 class TrainState(train_state.TrainState):
     mask: jnp.ndarray = None
     rng: Any = None
 
 def update_mask(coefficients, threshold=0.1):
     return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
-
 class Trainer:
     def __init__(
         self,
-        model: nn.Module,
-        model_hparams: Dict[str, Any],
-        optimizer_hparams: Dict[str, Any],
+        input_dim: int,
+        latent_dim: int,
+        poly_order: int,
+        widths: list,
         exmp_input: Any,
+        optimizer_hparams: Dict[str, Any] = {},
+        loss_params: Dict[str, Any] = {},
         seed: int = 42,
         logger_params: Dict[str, Any] = None,
         enable_progress_bar: bool = True,
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
         update_mask_every_n_epoch: int = 500,
-        loss_fn: Callable = lambda params, batch, model, mask: (0, None),
-        **kwargs,
     ):
         """
         Trainer module for holding all parts required for training a model. 
         This includes the model, optimizer, loss function, and the training loop.
 
         Args:
-            model (nn.Module): Flax model to be trained
-            model_hparams (Dict[str, Any]): Hyperparameters for the model
-            optimizer_hparams (Dict[str, Any]): Hyperparameters for the optimizer
-            exmp_input (Any): Example input to initialize the model
+            input_dim (int): Input dimension of the data.
+            latent_dim (int): Dimension of the latent space.
+            poly_order (int): Polynomial order for the SINDy library.
+            widths (list): List of layer widths for the encoder and decoder.
+            optimizer_hparams (Dict[str, Any], optional): Hyperparameters for the optimizer. Defaults to {}.
+            loss_params (Dict[str, Any], optional): Parameters for the loss function. Defaults to {}.
             seed (int, optional): Random seed. Defaults to 42.
             logger_params (Dict[str, Any], optional): Parameters for the logger. Defaults to None.
             enable_progress_bar (bool, optional): Whether to enable progress bar. Defaults to True.
-            debug (bool, optional): Whether to jit the loss funcions. Defaults to False.
+            debug (bool, optional): Whether to jit the loss functions. Defaults to False.
             check_val_every_n_epoch (int, optional): Check validation every n epoch. Defaults to 500.
             update_mask_every_n_epoch (int, optional): Update mask every n epoch. Defaults to 500.
-            loss_fn (Callable, optional): Loss function. Defaults to lambda params, batch, model, mask: (0, None).
         """
-        self.model = model
-        self.model_hparams = model_hparams
+        self.seed = seed
+        self.model_hparams = {
+            'input_dim': input_dim,
+            'latent_dim': latent_dim,
+            'poly_order': poly_order,
+            'widths': widths,
+        }
         self.optimizer_hparams = optimizer_hparams
         self.enable_progress_bar = enable_progress_bar
         self.debug = debug
-        self.seed = seed
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.update_mask_every_n_epoch = update_mask_every_n_epoch
-        self.loss_fn = loss_fn
+        self.loss_params = loss_params
 
-        self.exmp_input = exmp_input
-        json_model_hparams = self.json_serializable(copy(model_hparams))
-        self.config = {
-             "model_hparams": json_model_hparams,
+        # Store hyperparameters
+        self.hparams = {
+            "input_dim": input_dim,
+            "latent_dim": latent_dim,
+            "poly_order": poly_order,
+            "widths": widths,
             "optimizer_hparams": optimizer_hparams,
+            "loss_params": loss_params,
+            "seed": seed,
             "logger_params": logger_params,
-            "enable_progress_bar": self.enable_progress_bar,
-            "debug": self.debug,
+            "enable_progress_bar": enable_progress_bar,
+            "debug": debug,
             "check_val_every_n_epoch": check_val_every_n_epoch,
-            "seed": self.seed,
-            "update_mask_every_n_epoch": self.update_mask_every_n_epoch,
-            "loss_fn": loss_fn,
+            "update_mask_every_n_epoch": update_mask_every_n_epoch,
         }
-        self.config.update(kwargs)
 
-        self.print_tabulate(exmp_input)
+        self.init_model()
+        self.init_model_state(exmp_input)
         self.init_logger(logger_params)
         self.create_jitted_functions()
-        self.init_model(exmp_input)
     
+    def init_model(self):
+        """
+        Initialize the model components and compute the library size.
+        """
+        # Calculate library size
+        lib_size = library_size(self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
+
+        # Initialize Encoder and Decoder
+        self.model_hparams['encoder'] = Encoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        self.model_hparams['decoder'] = Decoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        self.model_hparams['lib_size'] = lib_size
+
+        # Initialize Autoencoder
+        self.model = Autoencoder(
+            input_dim=self.model_hparams['input_dim'],
+            latent_dim=self.model_hparams['latent_dim'],
+            lib_size=self.model_hparams['lib_size'],
+            widths=self.model_hparams['widths'],
+            encoder=self.model_hparams['encoder'],
+            decoder=self.model_hparams['decoder']
+        )
+
+        # Initialize the loss function
+        self.loss_fn = create_loss_fn(**self.loss_params)
 
     def json_serializable(self, obj: dict):
         """
-        Convert the model parameters to a JSON serializable format. For storing the model
+        Convert the model parameters to a JSON serializable format. For storing the model.
         """
         for key, value in obj.items():
             if isinstance(value, nn.Module):
@@ -104,38 +141,21 @@ class Trainer:
                 obj[key] = self.json_serializable(value)
         return obj
 
-    @staticmethod
-    def instantiate_from_dict(class_dict: dict):
-        """
-        Instantiate a class from a dictionary. Required for loading the model from a checkpoint. Inverse
-        of above method.
-
-        Args:
-            class_dict (dict): Dictionary containing the class name and parameters
-        """
-        class_name = class_dict['class']
-        params = class_dict['params']
-
-        if class_name == "Encoder":
-            return Encoder(**params)
-        elif class_name == "Decoder":
-            return Decoder(**params)
-        else:
-            raise ValueError(f"Unknown class name: {class_name}")
-
     def init_logger(self, logger_params: Optional[Dict] = None):
         """
         Initialize the tensorboard logger for logging the training metrics and model checkpoints.
         (see https://pytorch-lightning.readthedocs.io/en/stable/extensions/logging.html#tensorboard-logging)
 
+        default log_dir: checkpoints/version_{x} (x is auto-incremented (if not specified) for each run (1,2,3..))
+
         Args:
-            logger_params (Optional[Dict], optional): Parameters for the logger. Defaults to None.
+            logger_params (Optional[Dict], optional): Parameters for the logger. Mainly includes folder and file name params.
         """
         if logger_params is None:
             logger_params = dict()
         log_dir = logger_params.get("log_dir", None)
         if not log_dir:
-            log_dir  = logger_params.get("base_log_dir", "checkpoints/")
+            log_dir = logger_params.get("base_log_dir", "checkpoints/")
             if "logger_name" in logger_params:
                 log_dir = os.path.join(log_dir, logger_params["logger_name"])
             version = None
@@ -147,10 +167,10 @@ class Trainer:
         if not os.path.isfile(os.path.join(log_dir, "hparams.json")):
             os.makedirs(os.path.join(log_dir, "metrics/"), exist_ok=True)
             with open(os.path.join(log_dir, "hparams.json"), "w") as f:
-                json.dump(self.config, f, indent=4)
+                json.dump(self.hparams, f, indent=4)
         self.log_dir = log_dir
 
-    def init_model(self, exmp_input: Any):
+    def init_model_state(self, exmp_input: Any):
         """
         Initialize the flax model with the example input and random seed.
 
@@ -244,7 +264,7 @@ class Trainer:
         Callable[[TrainState, Any], Tuple[TrainState, Dict]],
     ]:
         """
-        Create the training and evaluation functions for the model. Based on the loss function. 
+        create training and evaluation functions for the model. Based on the loss function. 
         """
         def train_step(state: TrainState, batch: Tuple):
             def loss_fn(params):
@@ -306,7 +326,7 @@ class Trainer:
 
     def train_epoch(self, train_loader: Iterator) -> Dict[str, Any]:
         """
-        Train the model for one epoch using the training data loader.
+        Train the model for one epoch using the training data loader. Called from train_model.
 
         Args:
             train_loader (Iterator): Training data loader
@@ -325,7 +345,7 @@ class Trainer:
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:
         """
-        Evaluate the model using the data loader.
+        Evaluate the model using the data loader. Called from train_model.
 
         Args:
             data_loader (Iterator): Data loader for evaluation
@@ -344,23 +364,54 @@ class Trainer:
         return metrics
 
     def is_new_model_better(self, new_metrics: Dict[str, Any], old_metrics: Dict[str, Any]) -> bool:
+        """
+        Check if the new model is better than the old model based on the validation loss.
+
+        Args:
+            new_metrics (Dict[str, Any]): New metrics
+            old_metrics (Dict[str, Any]): Old metrics
+
+        Returns:
+            bool: True if the new model is better, False otherwise
+        """
         if old_metrics is None:
             return True
-        for key, is_larger in [("val/val_metric", False), ("val/loss", False)]:
-            if key in new_metrics:
-                if is_larger:
-                    return new_metrics[key] > old_metrics[key]
-                else:
-                    return new_metrics[key] < old_metrics[key]
+
+        # Compare only the validation loss
+        new_loss = new_metrics.get("val/loss")
+        old_loss = old_metrics.get("val/loss")
+
+        if new_loss is not None and old_loss is not None:
+            return new_loss < old_loss
+
+        # If for some reason the loss is not in the metrics, return False as a fallback
         assert False, f"No known metrics to log on: {new_metrics}"
 
+
     def tracker(self, iterator: Iterator, **kwargs) -> Iterator:
+        """
+        Create a tqdm progress bar if enable_progress_bar is True. Otherwise, return the iterator.
+
+        Args:
+            iterator (Iterator): Iterator to track
+
+        Returns:
+            Iterator: Tracked iterator
+        """
         if self.enable_progress_bar:
             return tqdm(iterator, **kwargs)
         else:
             return iterator
 
     def save_metrics(self, filename: str, metrics: Dict[str, Any]):
+        """
+        Save the metrics to a JSON file.
+
+        Args:
+            filename (str): Filename to save the metrics
+            metrics (Dict[str, Any]): Metrics to save
+        """
+
         metrics_dir = os.path.join(self.log_dir, "metrics")
         os.makedirs(metrics_dir, exist_ok=True)
         file_path = os.path.join(metrics_dir, f"{filename}.json")
@@ -377,50 +428,86 @@ class Trainer:
             overwrite=True,
         )
 
-    def load_model(self):
-        state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=None)
-        self.state = TrainState.create(
-            apply_fn=self.model.apply,
-            params=state_dict["params"],
-            tx=self.state.tx if self.state.tx else optax.sgd(0.1),
-            rng=self.state.rng,
-        )
-
     def bind_model(self):
+        """
+        Flax specific method to bind the model with the current parameters. 
+        This way model can be called as a function with the current parameters. self.model(x)
+
+        Returns:
+            Any: Model with the current parameters
+        """
         params = {"params": self.state.params}
         return self.model.bind(params)
+    
+    # def load_model(self):
+    #     """
+    #     Load the model from the latest checkpoint.
+    #     """
+    #     state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=None)
+    #     self.state = TrainState.create(
+    #         apply_fn=self.model.apply,
+    #         params=state_dict["params"],
+    #         tx=self.state.tx if self.state.tx else optax.sgd(0.1),
+    #         rng=self.state.rng,
+    #     )
 
     @classmethod
-    def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> Any:
+    def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'Trainer':
+        """
+        Load the trainer from a checkpoint. Required for loading the model and optimizer state.
+
+        Args:
+            checkpoint (str): Path to the checkpoint
+            exmp_input (Any): Example input to initialize the model
+        
+        Returns:
+            Trainer: Trainer object
+        """
         checkpoint = os.path.abspath(checkpoint)
         hparams_file = os.path.join(checkpoint, "hparams.json")
         assert os.path.isfile(hparams_file), "Could not find hparams file"
+        
         with open(hparams_file, "r") as f:
             hparams = json.load(f)
-        model_hparams = hparams.get("model_hparams", {})
-        encoder = cls.instantiate_from_dict(model_hparams.pop("encoder"))
-        decoder = cls.instantiate_from_dict(model_hparams.pop("decoder"))
-        model = Autoencoder(
-            input_dim=model_hparams["input_dim"],
-            latent_dim=model_hparams["latent_dim"],
-            lib_size=model_hparams["lib_size"],
-            widths=model_hparams["widths"],
-            encoder=encoder,
-            decoder=decoder,
-            train=True
-        )
+
+        # Create the trainer instance with the loaded hyperparameters
         trainer = cls(
-            model=model, 
-            model_hparams=hparams.get("model_hparams", {}),
-            optimizer_hparams=hparams.get("optimizer_hparams", {}),
+            input_dim=hparams["input_dim"],
+            latent_dim=hparams["latent_dim"],
+            poly_order=hparams["poly_order"],
+            widths=hparams["widths"],
             exmp_input=exmp_input,
+            optimizer_hparams=hparams.get("optimizer_hparams", {}),
+            loss_params=hparams.get("loss_params", {}),
             seed=hparams.get("seed", 42),
             logger_params=hparams.get("logger_params", {}),
             enable_progress_bar=hparams.get("enable_progress_bar", True),
             debug=hparams.get("debug", False),
-            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 100),
-            update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500),
-            loss_fn=hparams.get("loss_fn", lambda params, batch, model, mask: (0, None))
+            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
+            update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500)
         )
-        trainer.load_model()
+
+        # Load the model and optimizer state from the checkpoint
+        trainer.load_model(checkpoint)
+        
         return trainer
+
+    def load_model(self, checkpoint: str):
+        """
+        Load model and optimizer state from the checkpoint.
+
+        Args:
+            checkpoint (str): Path to the checkpoint
+        """
+        # Load model parameters
+        with open(os.path.join(checkpoint, 'model_state.json'), 'r') as f:
+            model_state = json.load(f)
+        self.state = self.state.replace(params=model_state['params'])
+
+        # Load optimizer state if available
+        if 'optimizer_state' in model_state:
+            self.state = self.state.replace(opt_state=model_state['optimizer_state'])
+
+        # Load other components if necessary (e.g., RNG states)
+        if 'rng' in model_state:
+            self.state = self.state.replace(rng=model_state['rng'])

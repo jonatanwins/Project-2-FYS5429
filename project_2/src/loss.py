@@ -113,7 +113,7 @@ def loss_regularization(xi: Array):
     return jnp.linalg.norm(xi, ord=1)
 
 
-def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, weights: tuple = (1, 1, 40, 1), batchsize: int = 128):
+def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, weights: tuple = (1, 1, 40, 1)):
     """
     Create a loss function for different sindy libraries
 

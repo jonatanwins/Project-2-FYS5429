@@ -1,19 +1,24 @@
 from flax import linen as nn
-from jax import numpy as jnp, Array
+from flax.linen import initializers
+from jax import Array
 
 class Encoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: nn.activation = nn.relu
-    initializer: nn.initializers = nn.initializers.glorot_normal()
+    activation: str = 'relu'
+    initializer: str = 'glorot_normal'
+
+    def setup(self):
+        self.activation_fn = getattr(nn, self.activation)
+        self.initializer_fn = getattr(initializers, self.initializer)()
 
     @nn.compact
     def __call__(self, x: Array):
         for width in self.widths:
-            x = nn.Dense(width, self.initializer)(x)
-            x = self.activation(x)
-        z = nn.Dense(self.latent_dim, self.initializer)(x)
+            x = nn.Dense(width, kernel_init=self.initializer_fn)(x)
+            x = self.activation_fn(x)
+        z = nn.Dense(self.latent_dim, kernel_init=self.initializer_fn)(x)
         return z
 
 
@@ -21,14 +26,18 @@ class Decoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: nn.activation = nn.relu
-    initializer: nn.initializers = nn.initializers.glorot_normal()
+    activation: str = 'relu'
+    initializer: str = 'glorot_normal'
+
+    def setup(self):
+        self.activation_fn = getattr(nn, self.activation)
+        self.initializer_fn = getattr(initializers, self.initializer)()
 
     @nn.compact
     def __call__(self, z):
         for width in reversed(self.widths):
-            z = nn.Dense(width, self.initializer)(z)
-            z = self.activation(z)
+            z = nn.Dense(width, kernel_init=self.initializer_fn)(z)
+            z = self.activation_fn(z)
         x_decode = nn.Dense(self.input_dim)(z)
         return x_decode
 
@@ -57,12 +66,11 @@ class Autoencoder(nn.Module):
 
 
 if __name__ == "__main__":
-
     from jax import random, tree_map
     import jax.numpy as jnp
     from flax.core.frozen_dict import freeze, FrozenDict
+    import numpy as np
 
-    # lets create an instance of the autoencoder and make sure it works
     key = random.PRNGKey(0)
     input_dim = 128
     latent_dim = 2
@@ -71,17 +79,16 @@ if __name__ == "__main__":
     x = jnp.ones((1, input_dim))
     encoder = Encoder(input_dim, latent_dim, widths)
     decoder = Decoder(input_dim, latent_dim, widths)
-    model = Autoencoder(input_dim, latent_dim, lib_size,
-                        widths, encoder, decoder)
-    a = str(encoder)
-    params = model.init(key, x)
+    model = Autoencoder(input_dim, latent_dim, lib_size, widths, encoder, decoder)
+
+    # Split the key for consistent initialization
+    key1, key2 = random.split(key)
+    params = model.init(key1, x)
     z, x_hat = model.apply(params, x)
     print(z.shape, x_hat.shape)
-    # lets have a look at the params
     print(type(params))
     print(tree_map(jnp.shape, params))
     print("=================================================")
-    # print(tree_map(jnp.shape, params['params']))
     encoder_params = {"params": params["params"]["encoder"]}
     print(tree_map(jnp.shape, encoder_params))
     print(type(encoder_params))
