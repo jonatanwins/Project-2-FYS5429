@@ -153,25 +153,27 @@ class DataSim:
             scaled_sample = qmc.scale(sample, lower_bounds, upper_bounds)
 
             # Check the dist. between bodies to make sure they are not to close
-            min_distance = 1e10  # Set minimum allowable distance between any two bodies for the three-body problem
+            min_distance = 1e3  # Set minimum allowable distance between any two bodies for the three-body problem
             if self.system_type == 'three_body':
                 distances_okay = True
                 for i in range(num_samples):
-                    for j in range(i + 1, num_samples):
-                        # Compute distances using positions only (first 9 elements are positions for 3 bodies)
-                        distance = np.linalg.norm(scaled_sample[i, :9] - scaled_sample[j, :9])
-                        if distance <= min_distance:
-                            distances_okay = False
+                    # Extract positions for each of the three bodies within a single sample
+                    positions = scaled_sample[i, :9].reshape(3, 3)  # Assume positions are the first three components for each body
+
+                    # Check distances between each pair of bodies within the sample
+                    for j in range(3):
+                        for k in range(j + 1, 3):
+                            distance = np.linalg.norm(positions[j] - positions[k])
+                            if distance < min_distance:
+                                distances_okay = False
+                                break
+                        if not distances_okay:
                             break
                     if not distances_okay:
                         break
                 if distances_okay:
                     initial_conditions = scaled_sample
                     break
-            else:
-                initial_conditions = scaled_sample
-                break
-
         return initial_conditions
 
 
