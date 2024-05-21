@@ -256,3 +256,5 @@ if __name__ ==  "__main__":
     # test the generate lorenz data function
     data = get_lorenz_data(1)
     print(data.keys())
+    #get sindy coefficients for the lorenz system
+    print(data['sindy_coefficients'])

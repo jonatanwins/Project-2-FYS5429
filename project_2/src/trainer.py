@@ -16,7 +16,7 @@ from collections import defaultdict
 import pickle
 
 import jax
-from jax import random, value_and_grad
+from jax import jit, random, value_and_grad
 from flax import linen as nn
 from flax.training import train_state, checkpoints
 import optax
@@ -31,8 +31,10 @@ class TrainState(train_state.TrainState):
     mask: jnp.ndarray = None
     rng: Any = None
 
+@jit
 def update_mask(coefficients, threshold=0.1):
     return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
+
 class Trainer:
     def __init__(
         self,
@@ -301,9 +303,21 @@ class Trainer:
         """
         self.init_optimizer(num_epochs, len(train_loader))
         best_eval_metrics = None
+        regularization_update_epoch = int(0.9 * num_epochs)
+
+
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
+
+            if epoch_idx == regularization_update_epoch:
+                new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
+                new_loss_params['regularization'] = False  # Update the copy with regularization=False
+                self.loss_fn = create_loss_fn(**new_loss_params)  # Create the new loss function
+                self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
+            
+
             train_metrics = self.train_epoch(train_loader)
             self.logger.log_metrics(train_metrics, step=epoch_idx)
+
             if epoch_idx % self.check_val_every_n_epoch == 0:
                 eval_metrics = self.eval_model(val_loader, log_prefix="val/")
                 self.logger.log_metrics(eval_metrics, step=epoch_idx)
@@ -313,9 +327,11 @@ class Trainer:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
+
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
+
         if test_loader is not None:
             self.load_model()
             test_metrics = self.eval_model(test_loader, log_prefix="test/")
@@ -323,6 +339,7 @@ class Trainer:
             self.save_metrics("test", test_metrics)
             best_eval_metrics.update(test_metrics)
         self.logger.finalize("success")
+        
         return best_eval_metrics
 
     def train_epoch(self, train_loader: Iterator) -> Dict[str, Any]:
@@ -419,22 +436,6 @@ class Trainer:
         print(f"Saving metrics to: {file_path}")
         with open(file_path, "w") as f:
             json.dump(metrics, f, indent=4)
-
-    # def save_model(self, step: int = 0):
-    #     absolute_log_dir = os.path.abspath(self.log_dir)
-    #     checkpoints.save_checkpoint(
-    #         ckpt_dir=absolute_log_dir,
-    #         target={"params": self.state.params, "opt_state": self.state.opt_state, "rng": self.state.rng},
-    #         step=step,
-    #         overwrite=True,
-    #     )
-    #     model_state = {
-    #         "params": jax.tree_util.tree_map(lambda x: x.tolist(), self.state.params),
-    #         "opt_state": jax.tree_util.tree_map(lambda x: x.tolist(), self.state.opt_state),
-    #         "rng": self.state.rng.tolist(),
-    #     }
-    #     with open(os.path.join(absolute_log_dir, 'model_state.json'), 'w') as f:
-    #         json.dump(model_state, f)
 
     def save_model(self, step: int = 0):
         absolute_log_dir = os.path.abspath(self.log_dir)

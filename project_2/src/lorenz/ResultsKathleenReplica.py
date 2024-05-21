@@ -1,3 +1,4 @@
+# %%
 import sys
 sys.path.append('../')
 from trainer import Trainer
@@ -12,19 +13,16 @@ exmp_input = jnp.arange(128).reshape(1, 128)
 
 
 
-# Create an instance of your trainer and load the model
-trainer = Trainer.load_from_checkpoint('src/lorenz/checkpoints/version_2', exmp_input)
+# PATH IS DIFFRENT FROM TERMINAL AND IDE /src/lorenz/checkpoints/version_0 vs checkpoints/version_0
+trainer = Trainer.load_from_checkpoint('checkpoints/version_0', exmp_input)
 
 # Access the parameters from the loaded model state
 sindy_coefficients = trainer.state.params['sindy_coefficients']
 
 mask = trainer.state.mask
 
-print(mask)
-
-
-t = np.arange(0, 20, 0.01)
-z0 = np.array([[-8, 7, 27]])
+t = np.arange(0, 10, 1)
+z0 = np.array([[-8]]) #7 AND 27 WHERE REMOVED
 params = {'input_dim': 128, 'latent_dim': 3, 'poly_order': 3, 'include_sine': False}
 
 # get lorentz data from non random ics
@@ -35,7 +33,7 @@ test_data = generate_lorenz_data(z0, t, params['input_dim'], linear=False, norma
 from sindy_utils import sindy_simulate 
 
 # Assuming trainer.state.params['sindy_coefficients'] contains the coefficients
-xi = trainer.state.params['sindy_coefficients'] * trainer.state.mask
+xi = sindy_coefficients * mask
 
 # Simulate the system using the discovered dynamics
 z_sim = sindy_simulate(test_data['z'][0], t, xi, params['poly_order'], params['include_sine'])
