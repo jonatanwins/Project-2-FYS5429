@@ -3,6 +3,9 @@ sys.path.append('../')
 from trainer import Trainer
 import jax.numpy as jnp
 from autoencoder import Autoencoder
+from lorenzUtils import generate_lorenz_data
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Assuming `exmp_input` is already defined or you know how to reconstruct it
 exmp_input = jnp.arange(128).reshape(1, 128)
@@ -10,15 +13,15 @@ exmp_input = jnp.arange(128).reshape(1, 128)
 
 
 # Create an instance of your trainer and load the model
-trainer = Trainer.load_from_checkpoint('src/lorenz/checkpoints/version_1', exmp_input)
+trainer = Trainer.load_from_checkpoint('src/lorenz/checkpoints/version_2', exmp_input)
 
 # Access the parameters from the loaded model state
 sindy_coefficients = trainer.state.params['sindy_coefficients']
 
-# If you want to print or further process sindy_coefficients
-print(sindy_coefficients)
+mask = trainer.state.mask
 
-quit()
+print(mask)
+
 
 t = np.arange(0, 20, 0.01)
 z0 = np.array([[-8, 7, 27]])
@@ -26,7 +29,7 @@ params = {'input_dim': 128, 'latent_dim': 3, 'poly_order': 3, 'include_sine': Fa
 
 # get lorentz data from non random ics
 test_data = generate_lorenz_data(z0, t, params['input_dim'], linear=False, normalization=np.array([1/40, 1/40, 1/40]))
-quit()
+
 
 # %%
 from sindy_utils import sindy_simulate 

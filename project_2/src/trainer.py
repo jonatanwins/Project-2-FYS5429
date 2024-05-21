@@ -13,6 +13,7 @@ import time
 from tqdm import tqdm
 from copy import copy
 from collections import defaultdict
+import pickle
 
 import jax
 from jax import random, value_and_grad
@@ -419,14 +420,38 @@ class Trainer:
         with open(file_path, "w") as f:
             json.dump(metrics, f, indent=4)
 
+    # def save_model(self, step: int = 0):
+    #     absolute_log_dir = os.path.abspath(self.log_dir)
+    #     checkpoints.save_checkpoint(
+    #         ckpt_dir=absolute_log_dir,
+    #         target={"params": self.state.params, "opt_state": self.state.opt_state, "rng": self.state.rng},
+    #         step=step,
+    #         overwrite=True,
+    #     )
+    #     model_state = {
+    #         "params": jax.tree_util.tree_map(lambda x: x.tolist(), self.state.params),
+    #         "opt_state": jax.tree_util.tree_map(lambda x: x.tolist(), self.state.opt_state),
+    #         "rng": self.state.rng.tolist(),
+    #     }
+    #     with open(os.path.join(absolute_log_dir, 'model_state.json'), 'w') as f:
+    #         json.dump(model_state, f)
+
     def save_model(self, step: int = 0):
         absolute_log_dir = os.path.abspath(self.log_dir)
         checkpoints.save_checkpoint(
             ckpt_dir=absolute_log_dir,
-            target={"params": self.state.params},
+            target={"params": self.state.params, "opt_state": self.state.opt_state},
             step=step,
             overwrite=True,
         )
+        model_state = {
+            "params": self.state.params,
+            "opt_state": self.state.opt_state,
+        }
+        with open(os.path.join(absolute_log_dir, 'model_state.pkl'), 'wb') as f:
+            pickle.dump(model_state, f)
+
+
 
     def bind_model(self):
         """
@@ -439,17 +464,6 @@ class Trainer:
         params = {"params": self.state.params}
         return self.model.bind(params)
     
-    # def load_model(self):
-    #     """
-    #     Load the model from the latest checkpoint.
-    #     """
-    #     state_dict = checkpoints.restore_checkpoint(ckpt_dir=self.log_dir, target=None)
-    #     self.state = TrainState.create(
-    #         apply_fn=self.model.apply,
-    #         params=state_dict["params"],
-    #         tx=self.state.tx if self.state.tx else optax.sgd(0.1),
-    #         rng=self.state.rng,
-    #     )
 
     @classmethod
     def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'Trainer':
@@ -499,15 +513,12 @@ class Trainer:
         Args:
             checkpoint (str): Path to the checkpoint
         """
-        # Load model parameters
-        with open(os.path.join(checkpoint, 'model_state.json'), 'r') as f:
-            model_state = json.load(f)
-        self.state = self.state.replace(params=model_state['params'])
+        checkpoint = os.path.abspath(checkpoint)
+        with open(os.path.join(checkpoint, 'model_state.pkl'), 'rb') as f:
+            model_state = pickle.load(f)
+        
+        self.state = self.state.replace(
+            params=model_state['params'],
+            opt_state=model_state['opt_state'],
+        )
 
-        # Load optimizer state if available
-        if 'optimizer_state' in model_state:
-            self.state = self.state.replace(opt_state=model_state['optimizer_state'])
-
-        # Load other components if necessary (e.g., RNG states)
-        if 'rng' in model_state:
-            self.state = self.state.replace(rng=model_state['rng'])
