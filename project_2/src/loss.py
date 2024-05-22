@@ -95,6 +95,12 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
     sindy_library = create_sindy_library(poly_order, include_sine, n_states=latent_dim)
     recon_weight, dx_weight, dz_weight, reg_weight = weights
 
+    # Vectorize individual losses using vmap
+    v_loss_recon = vmap(loss_recon_single, in_axes=(0, 0))
+    v_loss_dynamics_dx = vmap(loss_dynamics_dx_single, in_axes=(None, None, 0, 0, 0, None, None))
+    v_loss_dynamics_dz = vmap(loss_dynamics_dz_single, in_axes=(None, None, 0, 0, 0, None, None))
+
+
     def base_loss_fn(params: ModelLayers, batch: Tuple, autoencoder: nn.Module, mask: Array):
         """
         Base loss function without regularization
@@ -120,17 +126,12 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         encoder_params = params["encoder"]
         decoder_params = params["decoder"]
 
-        # Vectorize individual losses using vmap
-        loss_recon_fn = vmap(loss_recon_single, in_axes=(0, 0))
-        loss_dynamics_dx_fn = vmap(loss_dynamics_dx_single, in_axes=(None, None, 0, 0, 0, None, None))
-        loss_dynamics_dz_fn = vmap(loss_dynamics_dz_single, in_axes=(None, None, 0, 0, 0, None, None))
-
         # Compute losses across the entire batch
-        loss_reconstruction = jnp.mean(loss_recon_fn(features, x_hat))
-        loss_dynamics_dx_part = jnp.mean(loss_dynamics_dx_fn(
+        loss_reconstruction = jnp.mean(v_loss_recon(features, x_hat))
+        loss_dynamics_dx_part = jnp.mean(v_loss_dynamics_dx(
             decoder_params, decoder, z, target, theta, xi, mask
         ))
-        loss_dynamics_dz_part = jnp.mean(loss_dynamics_dz_fn(
+        loss_dynamics_dz_part = jnp.mean(v_loss_dynamics_dz(
             encoder_params, encoder, features, target, theta, xi, mask
         ))
         
