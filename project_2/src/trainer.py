@@ -83,6 +83,7 @@ class Trainer:
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.update_mask_every_n_epoch = update_mask_every_n_epoch
         self.loss_params = loss_params
+        self.logger_params = logger_params
 
         # Store hyperparameters
         self.hparams = {
@@ -102,7 +103,7 @@ class Trainer:
 
         self.init_model()
         self.init_model_state(exmp_input)
-        self.init_logger(logger_params)
+        #self.init_logger(logger_params)
         self.create_jitted_functions()
     
     def init_model(self):
@@ -301,6 +302,7 @@ class Trainer:
             num_epochs (int, optional): Number of epochs to train the model. Defaults to 500.
         
         """
+        self.init_logger(self.logger_params)
         self.init_optimizer(num_epochs, len(train_loader))
         best_eval_metrics = None
         regularization_update_epoch = int(0.9 * num_epochs)
