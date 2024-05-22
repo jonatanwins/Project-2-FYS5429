@@ -1,0 +1,27 @@
+{
+    "input_dim": 128,
+    "latent_dim": 3,
+    "poly_order": 3,
+    "widths": [
+        64,
+        32
+    ],
+    "optimizer_hparams": {},
+    "loss_params": {
+        "latent_dim": 3,
+        "poly_order": 3,
+        "include_sine": false,
+        "weights": [
+            1,
+            1,
+            40,
+            1
+        ]
+    },
+    "seed": 42,
+    "logger_params": {},
+    "enable_progress_bar": true,
+    "debug": false,
+    "check_val_every_n_epoch": 100,
+    "update_mask_every_n_epoch": 100
+}
