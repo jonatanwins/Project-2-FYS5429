@@ -217,7 +217,7 @@ class Trainer:
         
         """
         hparams = copy(self.optimizer_hparams)
-        optimizer_name = hparams.pop("optimizer", "adamw")
+        optimizer_name = hparams.pop("optimizer", "adam")
         if optimizer_name.lower() == "adam":
             opt_class = optax.adam
         elif optimizer_name.lower() == "adamw":
@@ -227,18 +227,8 @@ class Trainer:
         else:
             assert False, f'Unknown optimizer "{opt_class}"'
         lr = hparams.pop("lr", 1e-3)
-        warmup = hparams.pop("warmup", 0)
-        lr_schedule = optax.warmup_cosine_decay_schedule(
-            init_value=0.0,
-            peak_value=lr,
-            warmup_steps=warmup,
-            decay_steps=int(num_epochs * num_steps_per_epoch),
-            end_value=0.01 * lr,
-        )
-        transf = [optax.clip_by_global_norm(hparams.pop("gradient_clip", 1.0))]
-        if opt_class == optax.sgd and "weight_decay" in hparams:
-            transf.append(optax.add_decayed_weights(hparams.pop("weight_decay", 0.0)))
-        optimizer = optax.chain(*transf, opt_class(lr_schedule, **hparams))
+        
+        optimizer = opt_class(lr, **hparams)
         self.state = TrainState.create(
             apply_fn=self.state.apply_fn,
             params=self.state.params,

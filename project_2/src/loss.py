@@ -165,8 +165,6 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         return base_loss_fn
 
 
-
-
 if __name__ == "__main__":
     # lets thest the loss function
     from jax import random, tree_map
