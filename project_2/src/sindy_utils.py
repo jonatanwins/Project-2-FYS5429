@@ -115,38 +115,6 @@ def add_sine(features: Array, library: Array) -> Array:
     return library
 
 
-def sindy_fit(RHS, LHS, coefficient_threshold):
-    """
-
-    Fit the SINDy model coefficients using sequential thresholding.
-
-    Args:
-        RHS: jnp.ndarray, right-hand side of the SINDy model
-            - library matrix of candidate functions
-        LHS: jnp.ndarray, left-hand side of the SINDy model
-            - matrix of time derivatives
-        coefficient_threshold: float, the threshold below which
-            coefficients are set to zero
-
-    Returns:
-        Xi: jnp.ndarray, the SINDy model coefficients
-
-    """
-    m, n = LHS.shape
-    Xi = jnp.linalg.lstsq(RHS, LHS, rcond=None)[0]
-
-    for k in range(10):
-        small_inds = jnp.abs(Xi) < coefficient_threshold
-        Xi[small_inds] = 0
-        for i in range(n):
-            big_inds = ~small_inds[:, i]
-            if jnp.where(big_inds)[0].size == 0:
-                continue
-            Xi[big_inds, i] = jnp.linalg.lstsq(RHS[:, big_inds], LHS[:, i], rcond=None)[
-                0
-            ]
-    return Xi
-
 
 def sindy_simulate(x0, t, Xi, poly_order, include_sine):
     """
