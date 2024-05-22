@@ -22,7 +22,7 @@ sindy_coefficients = trainer.state.params['sindy_coefficients']
 mask = trainer.state.mask
 
 t = np.arange(0, 10, 1)
-z0 = np.array([[-8]]) #7 AND 27 WHERE REMOVED
+z0 = np.array([[-8, 7, 27]]) 
 params = {'input_dim': 128, 'latent_dim': 3, 'poly_order': 3, 'include_sine': False}
 
 # get lorentz data from non random ics
