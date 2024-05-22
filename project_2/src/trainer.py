@@ -318,6 +318,7 @@ class Trainer:
                     best_eval_metrics = eval_metrics
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
+                    print(eval_metrics["val/loss"])
                     self.save_metrics("best_eval", eval_metrics)
 
             if epoch_idx % self.update_mask_every_n_epoch == 0:
