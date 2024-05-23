@@ -27,13 +27,16 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from loss import create_loss_fn
 from sindy_utils import library_size
 
+
 class TrainState(train_state.TrainState):
     mask: jnp.ndarray = None
     rng: Any = None
 
+
 @jit
 def update_mask(coefficients, threshold=0.1):
     return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
+
 
 class Trainer:
     def __init__(
@@ -103,19 +106,22 @@ class Trainer:
 
         self.init_model()
         self.init_model_state(exmp_input)
-        #self.init_logger(logger_params)
+        # self.init_logger(logger_params)
         self.create_jitted_functions()
-    
+
     def init_model(self):
         """
         Initialize the model components and compute the library size.
         """
         # Calculate library size
-        lib_size = library_size(self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
+        lib_size = library_size(
+            self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
 
         # Initialize Encoder and Decoder
-        self.model_hparams['encoder'] = Encoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
-        self.model_hparams['decoder'] = Decoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        self.model_hparams['encoder'] = Encoder(
+            self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        self.model_hparams['decoder'] = Decoder(
+            self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
         self.model_hparams['lib_size'] = lib_size
 
         # Initialize Autoencoder
@@ -184,7 +190,8 @@ class Trainer:
         """
         model_rng = random.PRNGKey(self.seed)
         model_rng, init_rng = random.split(model_rng)
-        exmp_input = [exmp_input] if not isinstance(exmp_input, (list, tuple)) else exmp_input
+        exmp_input = [exmp_input] if not isinstance(
+            exmp_input, (list, tuple)) else exmp_input
         variables = self.run_model_init(exmp_input, init_rng)
         self.state = TrainState(
             step=0,
@@ -215,7 +222,7 @@ class Trainer:
         Args:
             num_epochs (int): Number of epochs to train the model (used for the learning rate schedule)
             num_steps_per_epoch (int): Number of steps per epoch (used for the learning rate schedule)
-        
+
         """
         hparams = copy(self.optimizer_hparams)
         optimizer_name = hparams.pop("optimizer", "adam")
@@ -228,7 +235,7 @@ class Trainer:
         else:
             assert False, f'Unknown optimizer "{opt_class}"'
         lr = hparams.pop("lr", 1e-3)
-        
+
         optimizer = opt_class(lr, **hparams)
         self.state = TrainState.create(
             apply_fn=self.state.apply_fn,
@@ -270,7 +277,8 @@ class Trainer:
             return state, metrics
 
         def eval_step(state: TrainState, batch: Any):
-            (loss, metrics) = self.loss_fn(state.params, batch, self.model, state.mask)
+            (loss, metrics) = self.loss_fn(
+                state.params, batch, self.model, state.mask)
             return metrics
 
         return train_step, eval_step
@@ -290,50 +298,52 @@ class Trainer:
             val_loader (Iterator): Validation data loader
             test_loader (Optional[Iterator], optional): Test data loader. Defaults to None.
             num_epochs (int, optional): Number of epochs to train the model. Defaults to 500.
-        
+
         """
         self.init_logger(self.logger_params)
         self.init_optimizer(num_epochs, len(train_loader))
         best_eval_metrics = None
         regularization_update_epoch = int(0.9 * num_epochs)
 
-
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
 
             if epoch_idx == regularization_update_epoch:
                 print("Disabling regularization for refinement period")
-                new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
-                new_loss_params['regularization'] = False  # Update the copy with regularization=False
-                self.loss_fn = create_loss_fn(**new_loss_params)  # Create the new loss function
-                self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
-            
+                # Create a copy of the loss parameters
+                new_loss_params = self.loss_params.copy()
+                # Update the copy with regularization=False
+                new_loss_params['regularization'] = False
+                # Create the new loss function
+                self.loss_fn = create_loss_fn(**new_loss_params)
+                # Recreate the jitted functions with the new loss function
+                self.create_jitted_functions()
 
             train_metrics = self.train_epoch(train_loader)
             self.logger.log_metrics(train_metrics, step=epoch_idx)
 
-            if epoch_idx % self.check_val_every_n_epoch == 0:
-                eval_metrics = self.eval_model(val_loader, log_prefix="val/")
-                self.logger.log_metrics(eval_metrics, step=epoch_idx)
-                self.save_metrics(f"eval_epoch_{str(epoch_idx).zfill(3)}", eval_metrics)
-                if self.is_new_model_better(eval_metrics, best_eval_metrics):
-                    best_eval_metrics = eval_metrics
-                    best_eval_metrics.update(train_metrics)
-                    self.save_model(step=epoch_idx)
-                    print(eval_metrics["val/loss"])
-                    self.save_metrics("best_eval", eval_metrics)
+            # if epoch_idx % self.check_val_every_n_epoch == 0:
+            #     eval_metrics = self.eval_model(val_loader, log_prefix="val/")
+            #     self.logger.log_metrics(eval_metrics, step=epoch_idx)
+            #     self.save_metrics(f"eval_epoch_{str(epoch_idx).zfill(3)}", eval_metrics)
+            #     if self.is_new_model_better(eval_metrics, best_eval_metrics):
+            #         best_eval_metrics = eval_metrics
+            #         best_eval_metrics.update(train_metrics)
+            #         self.save_model(step=epoch_idx)
+            #         print(eval_metrics["val/loss"])
+            #         self.save_metrics("best_eval", eval_metrics)
 
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
 
-        if test_loader is not None:
-            self.load_model()
-            test_metrics = self.eval_model(test_loader, log_prefix="test/")
-            self.logger.log_metrics(test_metrics, step=epoch_idx)
-            self.save_metrics("test", test_metrics)
-            best_eval_metrics.update(test_metrics)
+        # if test_loader is not None:
+        #     self.load_model()
+        #     test_metrics = self.eval_model(test_loader, log_prefix="test/")
+        #     self.logger.log_metrics(test_metrics, step=epoch_idx)
+        #     self.save_metrics("test", test_metrics)
+        #     best_eval_metrics.update(test_metrics)
         self.logger.finalize("success")
-        
+
         return best_eval_metrics
 
     def train_epoch(self, train_loader: Iterator) -> Dict[str, Any]:
@@ -368,11 +378,13 @@ class Trainer:
         num_elements = 0
         for batch in data_loader:
             step_metrics = self.eval_step(self.state, batch)
-            batch_size = batch[0].shape[0] if isinstance(batch, (list, tuple)) else batch.shape[0]
+            batch_size = batch[0].shape[0] if isinstance(
+                batch, (list, tuple)) else batch.shape[0]
             for key in step_metrics:
                 metrics[key] += step_metrics[key] * batch_size
             num_elements += batch_size
-        metrics = {log_prefix + key: (metrics[key] / num_elements).item() for key in metrics}
+        metrics = {log_prefix +
+                   key: (metrics[key] / num_elements).item() for key in metrics}
         return metrics
 
     def is_new_model_better(self, new_metrics: Dict[str, Any], old_metrics: Dict[str, Any]) -> bool:
@@ -398,7 +410,6 @@ class Trainer:
 
         # If for some reason the loss is not in the metrics, return False as a fallback
         assert False, f"No known metrics to log on: {new_metrics}"
-
 
     def tracker(self, iterator: Iterator, **kwargs) -> Iterator:
         """
@@ -435,7 +446,8 @@ class Trainer:
         absolute_log_dir = os.path.abspath(self.log_dir)
         checkpoints.save_checkpoint(
             ckpt_dir=absolute_log_dir,
-            target={"params": self.state.params, "opt_state": self.state.opt_state},
+            target={"params": self.state.params,
+                    "opt_state": self.state.opt_state},
             step=step,
             overwrite=True,
         )
@@ -445,8 +457,6 @@ class Trainer:
         }
         with open(os.path.join(absolute_log_dir, 'model_state.pkl'), 'wb') as f:
             pickle.dump(model_state, f)
-
-
 
     def bind_model(self):
         """
@@ -458,7 +468,6 @@ class Trainer:
         """
         params = {"params": self.state.params}
         return self.model.bind(params)
-    
 
     @classmethod
     def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'Trainer':
@@ -468,14 +477,14 @@ class Trainer:
         Args:
             checkpoint (str): Path to the checkpoint
             exmp_input (Any): Example input to initialize the model
-        
+
         Returns:
             Trainer: Trainer object
         """
         checkpoint = os.path.abspath(checkpoint)
         hparams_file = os.path.join(checkpoint, "hparams.json")
         assert os.path.isfile(hparams_file), "Could not find hparams file"
-        
+
         with open(hparams_file, "r") as f:
             hparams = json.load(f)
 
@@ -492,13 +501,15 @@ class Trainer:
             logger_params=hparams.get("logger_params", {}),
             enable_progress_bar=hparams.get("enable_progress_bar", True),
             debug=hparams.get("debug", False),
-            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
-            update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500)
+            check_val_every_n_epoch=hparams.get(
+                "check_val_every_n_epoch", 500),
+            update_mask_every_n_epoch=hparams.get(
+                "update_mask_every_n_epoch", 500)
         )
 
         # Load the model and optimizer state from the checkpoint
         trainer.load_model(checkpoint)
-        
+
         return trainer
 
     def load_model(self, checkpoint: str):
@@ -511,9 +522,8 @@ class Trainer:
         checkpoint = os.path.abspath(checkpoint)
         with open(os.path.join(checkpoint, 'model_state.pkl'), 'rb') as f:
             model_state = pickle.load(f)
-        
+
         self.state = self.state.replace(
             params=model_state['params'],
             opt_state=model_state['opt_state'],
         )
-

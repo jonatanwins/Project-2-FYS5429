@@ -1,4 +1,4 @@
-from lorenz.lorenzUtils import get_lorenz_data
+from lorenz.lorenzUtils import get_lorenz_train_data, get_lorenz_test_data
 from torch.utils.data import Dataset, DataLoader
 import torch
 import numpy as np
@@ -47,7 +47,11 @@ def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num
     Return:
         data_loader - PyTorch DataLoader for the Lorenz dataset.
     """
-    data = get_lorenz_data(n_ics, noise_strength)
+    if train:
+        data = get_lorenz_train_data(n_ics, noise_strength)
+    else:
+        data = get_lorenz_test_data(n_ics, noise_strength)
+
     dataset = LorenzDataset(data)
     loader = DataLoader(
         dataset,
