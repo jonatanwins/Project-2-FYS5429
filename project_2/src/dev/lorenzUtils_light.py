@@ -3,6 +3,7 @@ from jax import jit, vmap
 from jax.experimental.ode import odeint
 import numpy as np
 
+
 def legendre_polynomials(n, x):
     """Generate the first n Legendre polynomials at x."""
     polys = [jnp.ones_like(x), x]
@@ -11,6 +12,7 @@ def legendre_polynomials(n, x):
         polys.append(p_i)
     return jnp.array(polys[:n])
 
+
 def lorenz_ode(z, t, sigma=10, beta=8/3, rho=28):
     x, y, z = z
     dx = sigma * (y - x)
@@ -18,41 +20,52 @@ def lorenz_ode(z, t, sigma=10, beta=8/3, rho=28):
     dz = x * y - beta * z
     return jnp.array([dx, dy, dz])
 
+
 @jit
 def simulate_lorenz_odeint_light(z0, t, sigma=10.0, beta=8 / 3, rho=28.0):
     z = odeint(lorenz_ode, z0, t, sigma, beta, rho)
-    dt = t[1] - t[0]
-    dz = jnp.gradient(z, dt, axis=0)
+    dz = vmap(lorenz_ode, in_axes=(0, None, None, None, None))(
+        z, t, sigma, beta, rho)
     return z, dz
+
 
 def generate_modes(n_points):
     y_spatial = jnp.linspace(-1, 1, n_points)
-    modes = legendre_polynomials(6, y_spatial)  # Generate first 6 Legendre polynomials
+    # Generate first 6 Legendre polynomials
+    modes = legendre_polynomials(6, y_spatial)
     return modes, y_spatial
 
+
 def generate_lorenz_data_linear_light(ic, t, modes, normalization, sigma=10, beta=8 / 3, rho=28):
-    z, dz = simulate_lorenz_odeint_light(ic, t, sigma=sigma, beta=beta, rho=rho)
+    z, dz = simulate_lorenz_odeint_light(
+        ic, t, sigma=sigma, beta=beta, rho=rho)
     z *= normalization
     dz *= normalization
 
-    modes_linear = modes[:3]  # Only use the first three modes for the linear case
+    # Only use the first three modes for the linear case
+    modes_linear = modes[:3]
     x = jnp.einsum('ij,jk->ik', modes_linear.T, z.T)
     dx = jnp.einsum('ij,jk->ik', modes_linear.T, dz.T)
 
     return x.T, dx.T, z, dz
 
+
 def generate_lorenz_data_nonlinear_light(ic, t, modes, normalization, sigma=10, beta=8 / 3, rho=28):
-    z, dz = simulate_lorenz_odeint_light(ic, t, sigma=sigma, beta=beta, rho=rho)
+    z, dz = simulate_lorenz_odeint_light(
+        ic, t, sigma=sigma, beta=beta, rho=rho)
     z *= normalization
     dz *= normalization
 
     modes_linear = modes[:3]
     modes_cubic = modes[3:]
-    
-    x = jnp.einsum('ij,jk->ik', modes_linear.T, z.T) + jnp.einsum('ij,jk->ik', modes_cubic.T, (z.T)**3)
-    dx = jnp.einsum('ij,jk->ik', modes_linear.T, dz.T) + jnp.einsum('ij,jk,jk->ik', modes_cubic.T, 3 * (z.T)**2, dz.T)
+
+    x = jnp.einsum('ij,jk->ik', modes_linear.T, z.T) + \
+        jnp.einsum('ij,jk->ik', modes_cubic.T, (z.T)**3)
+    dx = jnp.einsum('ij,jk->ik', modes_linear.T, dz.T) + \
+        jnp.einsum('ij,jk,jk->ik', modes_cubic.T, 3 * (z.T)**2, dz.T)
 
     return x.T, dx.T, z, dz
+
 
 def get_lorenz_data_light(n_ics, noise_strength=0, linear=True):
     t = jnp.arange(0, 5, 0.02)
@@ -66,17 +79,23 @@ def get_lorenz_data_light(n_ics, noise_strength=0, linear=True):
 
     normalization = jnp.array([1 / 40, 1 / 40, 1 / 40])
     if linear:
-        data_per_ic = vmap(lambda ic: generate_lorenz_data_linear_light(ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
+        data_per_ic = vmap(lambda ic: generate_lorenz_data_linear_light(
+            ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
     else:
-        data_per_ic = vmap(lambda ic: generate_lorenz_data_nonlinear_light(ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
+        data_per_ic = vmap(lambda ic: generate_lorenz_data_nonlinear_light(
+            ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
 
     x, dx, z, dz = data_per_ic
 
-    x = x.reshape((-1, input_dim)) + noise_strength * np.random.randn(n_ics * t.size, input_dim)
-    dx = dx.reshape((-1, input_dim)) + noise_strength * np.random.randn(n_ics * t.size, input_dim)
+    x = x.reshape((-1, input_dim)) + noise_strength * \
+        np.random.randn(n_ics * t.size, input_dim)
+    dx = dx.reshape((-1, input_dim)) + noise_strength * \
+        np.random.randn(n_ics * t.size, input_dim)
 
     return t, y_spatial, modes, x, dx, z, dz
 
+
 if __name__ == "__main__":
     t, y_spatial, modes, x, dx, z, dz = get_lorenz_data_light(1, linear=False)
-    print(f't: {t.shape}, y_spatial: {y_spatial.shape}, modes: {modes.shape}, x: {x.shape}, dx: {dx.shape}, z: {z.shape}, dz: {dz.shape}')
+    print(f't: {t.shape}, y_spatial: {y_spatial.shape}, modes: {modes.shape}, x: {
+          x.shape}, dx: {dx.shape}, z: {z.shape}, dz: {dz.shape}')

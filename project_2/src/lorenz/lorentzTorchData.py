@@ -1,17 +1,15 @@
 from lorenz.lorenzUtils import get_lorenz_data
-from UvAutils.data_utils import create_data_loaders
-from torch.utils.data import Dataset
-import sys
-sys.path.append("../../src")
+from torch.utils.data import Dataset, DataLoader
+import torch
+import numpy as np
 
 
-class LorenzDataset_dx(Dataset):
+class LorenzDataset(Dataset):
     """
     PyTorch dataset for the Lorenz dataset.
 
     Arguments:
         data - Dictionary containing the Lorenz dataset.
-
     """
 
     def __init__(self, data):
@@ -25,7 +23,7 @@ class LorenzDataset_dx(Dataset):
         return self.x[idx], self.dx[idx]
 
 
-def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 4, batch_size: int = 128):
+def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 4, batch_size: int = 128, seed: int = 42):
     """
     Get a PyTorch DataLoader for the Lorenz dataset.
 
@@ -34,21 +32,46 @@ def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num
         noise_strength - Amount of noise to add to the data.
         num_workers - Number of workers to use in the DataLoader.
         batch_size - Batch size to use in the DataLoader.
+        seed - Random seed for reproducibility.
 
     Return:
         data_loader - PyTorch DataLoader for the Lorenz dataset.
-
     """
     data = get_lorenz_data(n_ics, noise_strength)
-    dataset = LorenzDataset_dx(data)
-    data_loader = create_data_loaders(
-        dataset, train=train, batch_size=batch_size, num_workers=num_workers)[0]
-    return data_loader
+    dataset = LorenzDataset(data)
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=train,
+        drop_last=train,
+        num_workers=num_workers,
+        persistent_workers=train,
+        generator=torch.Generator().manual_seed(seed)
+    )
+    return loader
+
+
+def get_random_sample(data_loader):
+    """
+    Get a random sample from the DataLoader.
+
+    Arguments:
+        data_loader - PyTorch DataLoader.
+
+    Return:
+        A random sample (x, dx) from the dataset.
+    """
+    dataset = data_loader.dataset
+    random_idx = np.random.randint(0, len(dataset))
+    return dataset[random_idx]
 
 
 if __name__ == "__main__":
-    # see what what one batch from the data loader looks like
+    # See what one batch from the data loader looks like
     data_loader = get_lorenz_dataloader(1, batch_size=20)
-    # get one batch from the data loader
+    # Get one batch from the data loader
     x, dx = next(iter(data_loader))
     print(x.shape, dx.shape)
+    # Get a random sample from the data loader
+    random_x, random_dx = get_random_sample(data_loader)
+    print(random_x.shape, random_dx.shape)
