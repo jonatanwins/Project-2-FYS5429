@@ -8,7 +8,7 @@ class Encoder(nn.Module):
     latent_dim: int
     widths: list
     activation: str = 'tanh'
-    initializer: str = '¨glorot_uniform'
+    initializer: str = 'glorot_uniform'
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)

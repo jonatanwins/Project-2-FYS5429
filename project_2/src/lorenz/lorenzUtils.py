@@ -4,7 +4,6 @@ Data-driven discovery of coordinates and governing equations (Champion et al. 20
 and is publicly available at https://github.com/kpchamp/SindyAutoencoders
 """
 
-
 from sindy_utils import library_size
 import numpy as np
 from scipy.integrate import odeint
@@ -20,6 +19,7 @@ def lorenz(t, z, sigma=10, beta=8/3, rho=28):
     dy = x * (rho - z) - y
     dz = x * y - beta * z
     return [dx, dy, dz]
+
 
 def get_lorenz_data(n_ics, noise_strength=0):
     """
@@ -55,9 +55,6 @@ def get_lorenz_data(n_ics, noise_strength=0):
     data["dx"] = data["dx"].reshape((-1, input_dim)) + noise_strength * np.random.randn(
         n_steps * n_ics, input_dim
     )
-    data["ddx"] = data["ddx"].reshape(
-        (-1, input_dim)
-    ) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
 
     return data
 
@@ -92,7 +89,7 @@ def simulate_lorenz(z0, t, sigma=10.0, beta=8 / 3, rho=28.0):
         sigma, beta, rho - Lorenz parameters
 
     Returns:
-        z, dz, ddz - Arrays of the trajectory values and their 1st and 2nd derivatives.
+        z, dz - Arrays of the trajectory values and their 1st derivatives.
     """
 
     def f(z, t):
@@ -102,22 +99,13 @@ def simulate_lorenz(z0, t, sigma=10.0, beta=8 / 3, rho=28.0):
             z[0] * z[1] - beta * z[2],
         ]
 
-    def df(z, dz, t):
-        return [
-            sigma * (dz[1] - dz[0]),
-            dz[0] * (rho - z[2]) + z[0] * (-dz[2]) - dz[1],
-            dz[0] * z[1] + z[0] * dz[1] - beta * dz[2],
-        ]
-
     z = odeint(f, z0, t)
 
     dt = t[1] - t[0]
     dz = np.zeros(z.shape)
-    ddz = np.zeros(z.shape)
     for i in range(t.size):
         dz[i] = f(z[i], dt * i)
-        ddz[i] = df(z[i], dz[i], dt * i)
-    return z, dz, ddz
+    return z, dz
 
 
 def generate_lorenz_data(
@@ -138,28 +126,25 @@ def generate_lorenz_data(
     Returns:
         data - Dictionary containing elements of the dataset. This includes the time points (t),
         spatial mapping (y_spatial), high-dimensional modes used to generate the full dataset
-        (modes), low-dimensional Lorenz dynamics (z, along with 1st and 2nd derivatives dz and
-        ddz), high-dimensional dataset (x, along with 1st and 2nd derivatives dx and ddx), and
+        (modes), low-dimensional Lorenz dynamics (z, along with 1st derivatives dz),
+        high-dimensional dataset (x, along with 1st derivatives dx), and
         the true Lorenz coefficient matrix for SINDy.
     """
 
     n_ics = ics.shape[0]
     n_steps = t.size
-    # dt = t[1] - t[0]
 
     d = 3
     z = np.zeros((n_ics, n_steps, d))
     dz = np.zeros(z.shape)
-    ddz = np.zeros(z.shape)
     for i in range(n_ics):
-        z[i], dz[i], ddz[i] = simulate_lorenz(
+        z[i], dz[i] = simulate_lorenz(
             ics[i], t, sigma=sigma, beta=beta, rho=rho
         )
 
     if normalization is not None:
         z *= normalization
         dz *= normalization
-        ddz *= normalization
 
     n = n_points
     L = 1
@@ -168,8 +153,6 @@ def generate_lorenz_data(
     modes = np.zeros((2 * d, n))
     for i in range(2 * d):
         modes[i] = legendre(i)(y_spatial)
-        # modes[i] = chebyt(i)(y_spatial)
-        # modes[i] = np.cos((i+1)*np.pi*y_spatial/2)
     x1 = np.zeros((n_ics, n_steps, n))
     x2 = np.zeros((n_ics, n_steps, n))
     x3 = np.zeros((n_ics, n_steps, n))
@@ -179,7 +162,6 @@ def generate_lorenz_data(
 
     x = np.zeros((n_ics, n_steps, n))
     dx = np.zeros(x.shape)
-    ddx = np.zeros(x.shape)
     for i in range(n_ics):
         for j in range(n_steps):
             x1[i, j] = modes[0] * z[i, j, 0]
@@ -204,30 +186,6 @@ def generate_lorenz_data(
                     + modes[5] * 3 * (z[i, j, 2] ** 2) * dz[i, j, 2]
                 )
 
-            ddx[i, j] = (
-                modes[0] * ddz[i, j, 0]
-                + modes[1] * ddz[i, j, 1]
-                + modes[2] * ddz[i, j, 2]
-            )
-            if not linear:
-                ddx[i, j] += (
-                    modes[3]
-                    * (
-                        6 * z[i, j, 0] * dz[i, j, 0] ** 2
-                        + 3 * (z[i, j, 0] ** 2) * ddz[i, j, 0]
-                    )
-                    + modes[4]
-                    * (
-                        6 * z[i, j, 1] * dz[i, j, 1] ** 2
-                        + 3 * (z[i, j, 1] ** 2) * ddz[i, j, 1]
-                    )
-                    + modes[5]
-                    * (
-                        6 * z[i, j, 2] * dz[i, j, 2] ** 2
-                        + 3 * (z[i, j, 2] ** 2) * ddz[i, j, 2]
-                    )
-                )
-
     if normalization is None:
         sindy_coefficients = lorenz_coefficients(
             [1, 1, 1], sigma=sigma, beta=beta, rho=rho
@@ -243,18 +201,16 @@ def generate_lorenz_data(
     data["modes"] = modes
     data["x"] = x
     data["dx"] = dx
-    data["ddx"] = ddx
     data["z"] = z
     data["dz"] = dz
-    data["ddz"] = ddz
     data["sindy_coefficients"] = sindy_coefficients.astype(np.float32)
 
     return data
 
 
-if __name__ ==  "__main__":
+if __name__ == "__main__":
     # test the generate lorenz data function
     data = get_lorenz_data(1)
     print(data.keys())
-    #get sindy coefficients for the lorenz system
+    # get sindy coefficients for the lorenz system
     print(data['sindy_coefficients'])
