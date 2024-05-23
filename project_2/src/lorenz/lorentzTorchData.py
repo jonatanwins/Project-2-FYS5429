@@ -23,7 +23,7 @@ class LorenzDataset(Dataset):
         return self.x[idx], self.dx[idx]
 
 
-def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 4, batch_size: int = 128, seed: int = 42):
+def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 1, batch_size: int = 128, seed: int = 42):
     """
     Get a PyTorch DataLoader for the Lorenz dataset.
 

@@ -1,3 +1,7 @@
+"""
+jax translation of the lorenz utils. Currently in 32bit precision.
+"""
+
 import jax.numpy as jnp
 from jax import jit, vmap
 from jax.experimental.ode import odeint
