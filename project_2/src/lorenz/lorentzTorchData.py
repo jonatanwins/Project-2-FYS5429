@@ -23,7 +23,17 @@ class LorenzDataset(Dataset):
         return self.x[idx], self.dx[idx]
 
 
-def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 1, batch_size: int = 128, seed: int = 42):
+def numpy_collate(batch):
+    if isinstance(batch[0], np.ndarray):
+        return np.stack(batch)
+    elif isinstance(batch[0], (tuple, list)):
+        transposed = zip(*batch)
+        return [numpy_collate(samples) for samples in transposed]
+    else:
+        return np.array(batch)
+
+
+def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 4, batch_size: int = 128, seed: int = 42):
     """
     Get a PyTorch DataLoader for the Lorenz dataset.
 
@@ -44,6 +54,7 @@ def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num
         batch_size=batch_size,
         shuffle=train,
         drop_last=train,
+        collate_fn=numpy_collate,
         num_workers=num_workers,
         persistent_workers=train,
         generator=torch.Generator().manual_seed(seed)
@@ -65,20 +76,6 @@ def get_random_sample(data_loader):
     random_idx = np.random.randint(0, len(dataset))
     return dataset[random_idx]
 
-
-"""
-
-def numpy_collate(batch):
-    if isinstance(batch[0], np.ndarray):
-        return np.stack(batch)
-    elif isinstance(batch[0], (tuple, list)):
-        transposed = zip(*batch)
-        return [numpy_collate(samples) for samples in transposed]
-    else:
-        return np.array(batch)
-
-kwarg for DataLoader: collate_fn=numpy_collate
-"""
 
 if __name__ == "__main__":
     # See what one batch from the data loader looks like
