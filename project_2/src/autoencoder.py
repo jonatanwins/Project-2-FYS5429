@@ -2,23 +2,27 @@ from flax import linen as nn
 from flax.linen import initializers
 from jax import Array
 
+
 class Encoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'relu'
-    initializer: str = 'glorot_normal'
+    activation: str = 'tanh'
+    initializer: str = '¨glorot_uniform'
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)
         self.initializer_fn = getattr(initializers, self.initializer)()
+        self.bias_initializer_fn = initializers.zeros
 
     @nn.compact
     def __call__(self, x: Array):
         for width in self.widths:
-            x = nn.Dense(width, kernel_init=self.initializer_fn)(x)
+            x = nn.Dense(width, kernel_init=self.initializer_fn,
+                         bias_init=self.bias_initializer_fn)(x)
             x = self.activation_fn(x)
-        z = nn.Dense(self.latent_dim, kernel_init=self.initializer_fn)(x)
+        z = nn.Dense(self.latent_dim, kernel_init=self.initializer_fn,
+                     bias_init=self.bias_initializer_fn)(x)
         return z
 
 
@@ -26,19 +30,22 @@ class Decoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'relu'
-    initializer: str = 'glorot_normal'
+    activation: str = 'tanh'
+    initializer: str = 'glorot_uniform'
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)
         self.initializer_fn = getattr(initializers, self.initializer)()
+        self.bias_initializer_fn = initializers.zeros
 
     @nn.compact
     def __call__(self, z):
         for width in reversed(self.widths):
-            z = nn.Dense(width, kernel_init=self.initializer_fn)(z)
+            z = nn.Dense(width, kernel_init=self.initializer_fn,
+                         bias_init=self.bias_initializer_fn)(z)
             z = self.activation_fn(z)
-        x_decode = nn.Dense(self.input_dim)(z)
+        x_decode = nn.Dense(self.input_dim, kernel_init=self.initializer_fn,
+                            bias_init=self.bias_initializer_fn)(z)
         return x_decode
 
 
@@ -52,7 +59,6 @@ class Autoencoder(nn.Module):
     train: bool = True
 
     def setup(self):
-
         self.sindy_coefficients = self.param(
             "sindy_coefficients",
             nn.initializers.constant(1.0),
@@ -79,7 +85,8 @@ if __name__ == "__main__":
     x = jnp.ones((1, input_dim))
     encoder = Encoder(input_dim, latent_dim, widths)
     decoder = Decoder(input_dim, latent_dim, widths)
-    model = Autoencoder(input_dim, latent_dim, lib_size, widths, encoder, decoder)
+    model = Autoencoder(input_dim, latent_dim, lib_size,
+                        widths, encoder, decoder)
 
     # Split the key for consistent initialization
     key1, key2 = random.split(key)

@@ -66,6 +66,20 @@ def get_random_sample(data_loader):
     return dataset[random_idx]
 
 
+"""
+
+def numpy_collate(batch):
+    if isinstance(batch[0], np.ndarray):
+        return np.stack(batch)
+    elif isinstance(batch[0], (tuple, list)):
+        transposed = zip(*batch)
+        return [numpy_collate(samples) for samples in transposed]
+    else:
+        return np.array(batch)
+
+kwarg for DataLoader: collate_fn=numpy_collate
+"""
+
 if __name__ == "__main__":
     # See what one batch from the data loader looks like
     data_loader = get_lorenz_dataloader(1, batch_size=20)

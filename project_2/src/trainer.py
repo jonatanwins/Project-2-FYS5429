@@ -301,6 +301,7 @@ class Trainer:
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
 
             if epoch_idx == regularization_update_epoch:
+                print("Disabling regularization for refinement period")
                 new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
                 new_loss_params['regularization'] = False  # Update the copy with regularization=False
                 self.loss_fn = create_loss_fn(**new_loss_params)  # Create the new loss function
