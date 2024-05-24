@@ -3,7 +3,6 @@ from torch.utils.data import Dataset, DataLoader
 import torch
 import numpy as np
 
-
 class LorenzDataset(Dataset):
     """
     PyTorch dataset for the Lorenz dataset.
@@ -83,7 +82,7 @@ def get_random_sample(data_loader):
 
 if __name__ == "__main__":
     # See what one batch from the data loader looks like
-    data_loader = get_lorenz_dataloader(1, batch_size=20)
+    data_loader = get_lorenz_dataloader(2, batch_size=20)
     # Get one batch from the data loader
     x, dx = next(iter(data_loader))
     print(x.shape, dx.shape)

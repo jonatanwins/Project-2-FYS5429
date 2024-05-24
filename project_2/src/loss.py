@@ -6,6 +6,7 @@ from jax import Array
 from type_utils import ModelLayers, ModelParams
 from flax import linen as nn
 
+
 def loss_recon_single(x: Array, x_hat: Array) -> Array:
     """
     Reconstruction loss for a single data point
@@ -18,6 +19,7 @@ def loss_recon_single(x: Array, x_hat: Array) -> Array:
         Array -- Reconstruction loss
     """
     return jnp.linalg.norm(x - x_hat) ** 2
+
 
 def loss_dynamics_dx_single(params: ModelParams, decoder: nn.Module, z: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array) -> Array:
     """
@@ -42,6 +44,7 @@ def loss_dynamics_dx_single(params: ModelParams, decoder: nn.Module, z: Array, d
     dpsi_dt = jnp.dot(jacobian_fn(params, z), theta @ (mask * xi))
     return jnp.linalg.norm(dx_dt - dpsi_dt) ** 2
 
+
 def loss_dynamics_dz_single(params: ModelParams, encoder: nn.Module, x: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array) -> Array:
     """
     Loss for the dynamics in z for a single data point
@@ -60,12 +63,13 @@ def loss_dynamics_dz_single(params: ModelParams, encoder: nn.Module, x: Array, d
     """
     def phi(params, x):
         return encoder.apply({"params": params}, x)
-    
+
     jacobian_fn = jacobian(phi, argnums=1)
     dphi_dt = jnp.dot(jacobian_fn(params, x), dx_dt)
     return jnp.linalg.norm(dphi_dt - theta @ (mask * xi)) ** 2
 
-def loss_regularization(xi: Array) -> Array:
+
+def loss_regularization(xi: Array, mask: Array) -> Array:
     """
     Regularization loss
 
@@ -75,7 +79,7 @@ def loss_regularization(xi: Array) -> Array:
     Returns:
         Array -- L1 norm of input
     """
-    return jnp.linalg.norm(xi, ord=1)
+    return jnp.linalg.norm(xi*mask, ord=1)
 
 
 def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False, weights: tuple = (1, 1, 40, 1), regularization: bool = True):
@@ -92,14 +96,16 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
     Returns:
         Callable: Loss function
     """
-    sindy_library = create_sindy_library(poly_order, include_sine, n_states=latent_dim)
+    sindy_library = create_sindy_library(
+        poly_order, include_sine, n_states=latent_dim)
     recon_weight, dx_weight, dz_weight, reg_weight = weights
 
     # Vectorize individual losses using vmap
     v_loss_recon = vmap(loss_recon_single, in_axes=(0, 0))
-    v_loss_dynamics_dx = vmap(loss_dynamics_dx_single, in_axes=(None, None, 0, 0, 0, None, None))
-    v_loss_dynamics_dz = vmap(loss_dynamics_dz_single, in_axes=(None, None, 0, 0, 0, None, None))
-
+    v_loss_dynamics_dx = vmap(loss_dynamics_dx_single,
+                              in_axes=(None, None, 0, 0, 0, None, None))
+    v_loss_dynamics_dz = vmap(loss_dynamics_dz_single,
+                              in_axes=(None, None, 0, 0, 0, None, None))
 
     def base_loss_fn(params: ModelLayers, batch: Tuple, autoencoder: nn.Module, mask: Array):
         """
@@ -134,7 +140,7 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
         loss_dynamics_dz_part = jnp.mean(v_loss_dynamics_dz(
             encoder_params, encoder, features, target, theta, xi, mask
         ))
-        
+
         total_loss = (
             recon_weight * loss_reconstruction
             + dx_weight * loss_dynamics_dx_part
@@ -152,9 +158,10 @@ def create_loss_fn(latent_dim: int, poly_order: int, include_sine: bool = False,
 
     if regularization:
         def loss_fn_with_reg(params: ModelLayers, batch: Tuple, autoencoder: nn.Module, mask: Array):
-            total_loss, loss_dict = base_loss_fn(params, batch, autoencoder, mask)
+            total_loss, loss_dict = base_loss_fn(
+                params, batch, autoencoder, mask)
             xi = params["sindy_coefficients"]
-            loss_reg = loss_regularization(xi)
+            loss_reg = loss_regularization(xi, mask)
             total_loss += reg_weight * loss_reg
             loss_dict["loss"] = total_loss
             loss_dict["regularization"] = reg_weight * loss_reg
@@ -181,7 +188,6 @@ if __name__ == "__main__":
     latent_dim = 3
     lib_size = library_size(3, 3)
     poly_order = 3
-    
 
     encoder = Encoder(input_dim=input_dim,
                       latent_dim=latent_dim, widths=[32, 32])
@@ -219,8 +225,8 @@ if __name__ == "__main__":
         mask=state.mask
     )
 
-    loss_fn = create_loss_fn(latent_dim,poly_order, include_sine=False, weights=(1, 1, 40, 1))
-
+    loss_fn = create_loss_fn(latent_dim, poly_order,
+                             include_sine=False, weights=(1, 1, 40, 1))
 
     loss, losses = loss_fn(
         state.params, (features, target), autoencoder, state.mask)
