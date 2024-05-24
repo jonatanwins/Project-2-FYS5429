@@ -71,12 +71,15 @@ class Trainer:
             update_mask_every_n_epoch (int, optional): Update mask every n epoch. Defaults to 500.
         """
         self.seed = seed
+
+        ### Hyperparameters for autoencoder setup
         self.model_hparams = {
             'input_dim': input_dim,
             'latent_dim': latent_dim,
             'poly_order': poly_order,
             'widths': widths,
         }
+
         self.optimizer_hparams = optimizer_hparams
         self.enable_progress_bar = enable_progress_bar
         self.debug = debug
@@ -85,7 +88,7 @@ class Trainer:
         self.loss_params = loss_params
         self.logger_params = logger_params
 
-        # Store hyperparameters
+        # Store hyperparameters for trainer and model
         self.hparams = {
             "input_dim": input_dim,
             "latent_dim": latent_dim,
@@ -100,23 +103,26 @@ class Trainer:
             "check_val_every_n_epoch": check_val_every_n_epoch,
             "update_mask_every_n_epoch": update_mask_every_n_epoch,
         }
-
+        ### Define the autoencoder model and create the loss function
         self.init_model()
+
+        ### Initialize the model parameters and optimizer
         self.init_model_state(exmp_input)
-        #self.init_logger(logger_params)
         self.create_jitted_functions()
+        ### Logger is intialized on training
     
     def init_model(self):
         """
         Initialize the model components and compute the library size.
         """
-        # Calculate library size
+        # Calculate library size and saving to model hyperparameters
         lib_size = library_size(self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
+        self.model_hparams['lib_size'] = lib_size
 
         # Initialize Encoder and Decoder
-        self.model_hparams['encoder'] = Encoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
-        self.model_hparams['decoder'] = Decoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
-        self.model_hparams['lib_size'] = lib_size
+        encoder = Encoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        decoder = Decoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        
 
         # Initialize Autoencoder
         self.model = Autoencoder(
@@ -124,8 +130,8 @@ class Trainer:
             latent_dim=self.model_hparams['latent_dim'],
             lib_size=self.model_hparams['lib_size'],
             widths=self.model_hparams['widths'],
-            encoder=self.model_hparams['encoder'],
-            decoder=self.model_hparams['decoder']
+            encoder=encoder,
+            decoder=decoder
         )
 
         # Initialize the loss function
@@ -182,10 +188,16 @@ class Trainer:
             exmp_input (Any): Example input to initialize the model, with correct input shape
 
         """
+        ### Split initialization rng
         model_rng = random.PRNGKey(self.seed)
         model_rng, init_rng = random.split(model_rng)
+
+        ### Set correct example input for initialization
         exmp_input = [exmp_input] if not isinstance(exmp_input, (list, tuple)) else exmp_input
+        ### Initialize model parameters
         variables = self.run_model_init(exmp_input, init_rng)
+
+        ### Optimizer state
         self.state = TrainState(
             step=0,
             apply_fn=self.model.apply,
