@@ -300,6 +300,7 @@ class Trainer:
             num_epochs (int, optional): Number of epochs to train the model. Defaults to 500.
 
         """
+        print("starting training- trainer")
         self.init_logger(self.logger_params)
         self.init_optimizer(num_epochs, len(train_loader))
         best_eval_metrics = None
@@ -317,7 +318,7 @@ class Trainer:
                 self.loss_fn = create_loss_fn(**new_loss_params)
                 # Recreate the jitted functions with the new loss function
                 self.create_jitted_functions()
-
+            print("Epoch: ", epoch_idx)
             train_metrics = self.train_epoch(train_loader)
             self.logger.log_metrics(train_metrics, step=epoch_idx)
 
@@ -358,6 +359,7 @@ class Trainer:
         num_train_steps = len(train_loader)
         start_time = time.time()
         for batch in train_loader:
+            print("training batch")
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps

@@ -26,7 +26,7 @@ def lorenz_ode(z, t, sigma=10, beta=8/3, rho=28):
 
 
 @jit
-def simulate_lorenz_odeint_light(z0, t, sigma=10.0, beta=8 / 3, rho=28.0):
+def simulate_lorenz_odeint(z0, t, sigma=10.0, beta=8 / 3, rho=28.0):
     z = odeint(lorenz_ode, z0, t, sigma, beta, rho)
     dz = vmap(lorenz_ode, in_axes=(0, None, None, None, None))(
         z, t, sigma, beta, rho)
@@ -40,8 +40,8 @@ def generate_modes(n_points):
     return modes, y_spatial
 
 
-def generate_lorenz_data_linear_light(ic, t, modes, normalization, sigma=10, beta=8 / 3, rho=28):
-    z, dz = simulate_lorenz_odeint_light(
+def generate_lorenz_data_linear(ic, t, modes, normalization, sigma=10, beta=8 / 3, rho=28):
+    z, dz = simulate_lorenz_odeint(
         ic, t, sigma=sigma, beta=beta, rho=rho)
     z *= normalization
     dz *= normalization
@@ -54,8 +54,8 @@ def generate_lorenz_data_linear_light(ic, t, modes, normalization, sigma=10, bet
     return x.T, dx.T, z, dz
 
 
-def generate_lorenz_data_nonlinear_light(ic, t, modes, normalization, sigma=10, beta=8 / 3, rho=28):
-    z, dz = simulate_lorenz_odeint_light(
+def generate_lorenz_data_nonlinear(ic, t, modes, normalization, sigma=10, beta=8 / 3, rho=28):
+    z, dz = simulate_lorenz_odeint(
         ic, t, sigma=sigma, beta=beta, rho=rho)
     z *= normalization
     dz *= normalization
@@ -71,7 +71,7 @@ def generate_lorenz_data_nonlinear_light(ic, t, modes, normalization, sigma=10, 
     return x.T, dx.T, z, dz
 
 
-def get_test_lorenz_data_light(n_ics, noise_strength=0, linear=True):
+def get_lorenz_test_data(n_ics, noise_strength=0, linear=True):
     t = jnp.arange(0, 5, 0.02)
     input_dim = 128
 
@@ -83,10 +83,10 @@ def get_test_lorenz_data_light(n_ics, noise_strength=0, linear=True):
 
     normalization = jnp.array([1 / 40, 1 / 40, 1 / 40])
     if linear:
-        data_per_ic = vmap(lambda ic: generate_lorenz_data_linear_light(
+        data_per_ic = vmap(lambda ic: generate_lorenz_data_linear(
             ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
     else:
-        data_per_ic = vmap(lambda ic: generate_lorenz_data_nonlinear_light(
+        data_per_ic = vmap(lambda ic: generate_lorenz_data_nonlinear(
             ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
 
     x, dx, z, dz = data_per_ic
@@ -96,10 +96,10 @@ def get_test_lorenz_data_light(n_ics, noise_strength=0, linear=True):
     dx = dx.reshape((-1, input_dim)) + noise_strength * \
         np.random.randn(n_ics * t.size, input_dim)
 
-    return t, y_spatial, modes, x, dx, z, dz
+    return {'t': t, 'y_spatial': y_spatial, 'modes': modes, 'x': x, 'dx': dx, 'z': z, 'dz': dz}
 
 
-def get_train_lorenz_data_light(n_ics, noise_strength=0, linear=True):
+def get_lorenz_train_data(n_ics, noise_strength=0, linear=True):
     t = jnp.arange(0, 5, 0.02)
     input_dim = 128
 
@@ -111,10 +111,10 @@ def get_train_lorenz_data_light(n_ics, noise_strength=0, linear=True):
 
     normalization = jnp.array([1 / 40, 1 / 40, 1 / 40])
     if linear:
-        data_per_ic = vmap(lambda ic: generate_lorenz_data_linear_light(
+        data_per_ic = vmap(lambda ic: generate_lorenz_data_linear(
             ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
     else:
-        data_per_ic = vmap(lambda ic: generate_lorenz_data_nonlinear_light(
+        data_per_ic = vmap(lambda ic: generate_lorenz_data_nonlinear(
             ic, t, modes, normalization, 10, 8 / 3, 28))(ics)
 
     x, dx, z, dz = data_per_ic
@@ -124,11 +124,9 @@ def get_train_lorenz_data_light(n_ics, noise_strength=0, linear=True):
     dx = dx.reshape((-1, input_dim)) + noise_strength * \
         np.random.randn(n_ics * t.size, input_dim)
 
-    return x, dx
+    return {'x': x, 'dx': dx}
 
 
 if __name__ == "__main__":
-    t, y_spatial, modes, x, dx, z, dz = get_test_lorenz_data_light(
-        1, linear=False)
-    print(f't: {t.shape}, y_spatial: {y_spatial.shape}, modes: {modes.shape}, x: {
-          x.shape}, dx: {dx.shape}, z: {z.shape}, dz: {dz.shape}')
+    data = get_lorenz_test_data(1, linear=False)
+    print(f't: {data["t"].shape}, y_spatial: {data["y_spatial"].shape}, modes: {data["modes"].shape}, x: {data["x"].shape}, dx: {data["dx"].shape}, z: {data["z"].shape}, dz: {data["dz"].shape}')
