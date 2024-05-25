@@ -1,8 +1,8 @@
 # %% [markdown]
-# This notebook reproduces the Lorentz results from [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116). The data generation is specified in the  [appendix](https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.1906995116&file=pnas.1906995116.sapp.pdf) of [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116), and is restated here. 
+# This notebook reproduces the Lorenz results from [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116). The data generation is specified in the  [appendix](https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.1906995116&file=pnas.1906995116.sapp.pdf) of [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116), and is restated here. 
 # 
 # 
-# The data was syntheticaly generated using the governing lorentz
+# The data was syntheticaly generated using the governing lorenz
 # equations
 # 
 # 
@@ -79,7 +79,7 @@ mp.set_start_method('spawn', force=True)
 # %%
 import sys
 sys.path.append('../')
-from lorentzTorchData import get_lorenz_dataloader, get_random_sample # type: ignore - goofy linting issue
+from lorenzTorchData import get_lorenz_dataloader, get_random_sample # type: ignore - goofy linting issue
 
 # Define all arguments as variables
 n_ics_training = 2048
