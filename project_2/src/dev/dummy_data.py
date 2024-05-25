@@ -1,5 +1,7 @@
 import numpy as np
+from jax.tree_util import tree_map
 from torch.utils.data import Dataset, DataLoader
+from torch.utils import data
 
 class MyDataset(Dataset):
     def __init__(self, num_samples, num_features):
@@ -13,13 +15,7 @@ class MyDataset(Dataset):
         return self.data1[idx], self.data2[idx]
 
 def numpy_collate(batch):
-    if isinstance(batch[0], np.ndarray):
-        return np.stack(batch)
-    elif isinstance(batch[0], (tuple, list)):
-        transposed = zip(*batch)
-        return [numpy_collate(samples) for samples in transposed]
-    else:
-        return np.array(batch)
+  return tree_map(np.asarray, data.default_collate(batch))
 
 def get_dummy_dataloader(num_datapoints, num_features, batch_size, shuffle=True, num_workers=0, persistent_workers=False):
     # Create the dataset

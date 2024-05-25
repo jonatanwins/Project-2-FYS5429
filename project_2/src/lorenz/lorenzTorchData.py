@@ -1,8 +1,31 @@
 from lorenz.lorenzUtils import get_lorenz_train_data, get_lorenz_test_data
 #from lorenz.lorenzUtils_jax import get_lorenz_train_data, get_lorenz_test_data
-from torch.utils.data import Dataset, DataLoader
 import torch
 import numpy as np
+from torch.utils.data import Dataset
+from jax.tree_util import tree_map
+from torch.utils import data
+
+def numpy_collate(batch):
+    return tree_map(np.asarray, data.default_collate(batch))
+
+class NumpyLoader(data.DataLoader):
+    def __init__(self, dataset, batch_size=1,
+                 shuffle=False, sampler=None,
+                 batch_sampler=None, num_workers=0,
+                 pin_memory=False, drop_last=False,
+                 timeout=0, worker_init_fn=None):
+        super(self.__class__, self).__init__(dataset,
+                                             batch_size=batch_size,
+                                             shuffle=shuffle,
+                                             sampler=sampler,
+                                             batch_sampler=batch_sampler,
+                                             num_workers=num_workers,
+                                             collate_fn=numpy_collate,
+                                             pin_memory=pin_memory,
+                                             drop_last=drop_last,
+                                             timeout=timeout,
+                                             worker_init_fn=worker_init_fn)
 
 class LorenzDataset(Dataset):
     """
@@ -22,28 +45,20 @@ class LorenzDataset(Dataset):
     def __getitem__(self, idx):
         return self.x[idx], self.dx[idx]
 
-
-def numpy_collate(batch):
-    if isinstance(batch[0], np.ndarray):
-        return np.stack(batch)
-    elif isinstance(batch[0], (tuple, list)):
-        transposed = zip(*batch)
-        return [numpy_collate(samples) for samples in transposed]
-    else:
-        return np.array(batch)
-
-
-def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num_workers: int = 4, batch_size: int = 128, seed: int = 42):
+def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, batch_size: int = 128, num_workers: int = 0, pin_memory: bool = False, drop_last: bool = False, timeout: int = 0, worker_init_fn = None):
     """
     Get a PyTorch DataLoader for the Lorenz dataset.
 
     Arguments:
         n_ics - Integer specifying the number of initial conditions to use.
         noise_strength - Amount of noise to add to the data.
-        num_workers - Number of workers to use in the DataLoader.
         batch_size - Batch size to use in the DataLoader.
-        seed - Random seed for reproducibility.
-
+        num_workers - Number of workers to use in the DataLoader.
+        pin_memory - If True, the data loader will copy Tensors into CUDA pinned memory before returning them.
+        drop_last - If True, the DataLoader will drop the last incomplete batch.
+        timeout - Timeout value for collecting a batch from workers.
+        worker_init_fn - Function to be called on each worker subprocess.
+    
     Return:
         data_loader - PyTorch DataLoader for the Lorenz dataset.
     """
@@ -53,18 +68,17 @@ def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, num
         data = get_lorenz_test_data(n_ics, noise_strength)
 
     dataset = LorenzDataset(data)
-    loader = DataLoader(
+    loader = NumpyLoader(
         dataset,
         batch_size=batch_size,
         shuffle=train,
-        drop_last=train,
-        collate_fn=numpy_collate,
         num_workers=num_workers,
-        persistent_workers=train,
-        generator=torch.Generator().manual_seed(seed)
+        pin_memory=pin_memory,
+        drop_last=drop_last,
+        timeout=timeout,
+        worker_init_fn=worker_init_fn
     )
     return loader
-
 
 def get_random_sample(data_loader):
     """
@@ -79,7 +93,6 @@ def get_random_sample(data_loader):
     dataset = data_loader.dataset
     random_idx = np.random.randint(0, len(dataset))
     return dataset[random_idx]
-
 
 if __name__ == "__main__":
     # See what one batch from the data loader looks like
