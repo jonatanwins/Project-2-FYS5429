@@ -222,7 +222,7 @@ class Trainer:
 
     def init_optimizer(self, num_epochs: int, num_steps_per_epoch: int):
         """
-        Initialize the optimizer with the hyperparameters. Defaults to AdamW with a warmup cosine decay schedule.
+        Initialize the optimizer with the hyperparameters. Defaults to Adam.
 
         Args:
             num_epochs (int): Number of epochs to train the model (used for the learning rate schedule)
