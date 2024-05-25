@@ -1,8 +1,8 @@
 # %% [markdown]
-# This notebook reproduces the Lorenz results from [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116). The data generation is specified in the  [appendix](https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.1906995116&file=pnas.1906995116.sapp.pdf) of [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116), and is restated here. 
+# This notebook reproduces the Lorentz results from [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116). The data generation is specified in the  [appendix](https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.1906995116&file=pnas.1906995116.sapp.pdf) of [Champion et. al](https://www.pnas.org/doi/full/10.1073/pnas.1906995116), and is restated here. 
 # 
 # 
-# The data was syntheticaly generated using the governing lorenz
+# The data was syntheticaly generated using the governing lorentz
 # equations
 # 
 # 
@@ -78,20 +78,17 @@ mp.set_start_method('spawn', force=True)
 
 
 import __main__
-
-# Set __spec__ to None to avoid multiprocessing issues in Jupyter/Colab environments
-if not hasattr(__main__, '__spec__'):
+#set __spec__ to None to avoid breaking the multiprocessing
+#check if main has attribute __spec__ and set to none
+if hasattr(__main__, '__spec__'):
     __main__.__spec__ = None
+# #do the same for __file__
+# if hasattr(__main__, '__file__'):
+#     __main__.__file__ = None
+# #do the same for __loader__
+# if hasattr(__main__, '__loader__'):
+#     __main__.__loader__ = None
 
-# %%
-import jax
-import jax.numpy as jnp
-
-# Check if GPU is available
-if jax.devices("gpu"):
-    print("GPU is available")
-else:
-    print("GPU is not available")
 
 # %%
 import sys
@@ -102,9 +99,22 @@ from lorenzTorchData import get_lorenz_dataloader, get_random_sample # type: ign
 # generate training, validation, testing data
 noise_strength = 1e-6
 
-training_data = get_lorenz_dataloader(204, noise_strength=noise_strength, batch_size=100)
-validation_data = get_lorenz_dataloader(20, train=False, noise_strength=noise_strength, batch_size=10)
-testing_data = get_lorenz_dataloader(10, train=False, noise_strength=noise_strength, batch_size=10)
+# training_data = get_lorenz_dataloader(204, noise_strength=noise_strength, batch_size=8000)
+# validation_data = get_lorenz_dataloader(20, train=False, noise_strength=noise_strength, batch_size=800)
+# testing_data = get_lorenz_dataloader(100, train=False, noise_strength=noise_strength, batch_size= 800)
+
+from dummy_data import get_dummy_dataloader
+
+num_datapoints = 1000000  # 1 million data points
+num_datapoints_val = 10000 
+num_features = 128
+batch_size = 64
+shuffle = True
+num_workers = 0
+persistent_workers = False
+
+training_data = get_dummy_dataloader(num_datapoints, num_features, batch_size, shuffle, num_workers, persistent_workers)
+validation_data = get_dummy_dataloader(num_datapoints_val, num_features, batch_size, shuffle, num_workers, persistent_workers)
 
 
 
@@ -147,12 +157,11 @@ trainer = Trainer(
     seed=42,
     logger_params=logger_params,
     check_val_every_n_epoch=1000,
-    update_mask_every_n_epoch=500
+    update_mask_every_n_epoch=500,
+    debug=True
 )
 
 # %%
-print("starting training")
-
 trainer.train_model(training_data, validation_data, num_epochs=10000)
 
 # %%

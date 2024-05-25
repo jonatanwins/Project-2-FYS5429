@@ -4,7 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 class MyDataset(Dataset):
     def __init__(self, num_samples, num_features):
         self.data1 = np.random.randn(num_samples, num_features).astype(np.float32)
-        self.data2 = np.random.randint(0, 2, num_samples).astype(np.int64)
+        self.data2 = np.random.randn(num_samples, num_features).astype(np.float32)
 
     def __len__(self):
         return len(self.data1)
@@ -51,6 +51,4 @@ if __name__ == "__main__":
     for batch in dataloader:
         x, y = batch
         print(f'x: {x.shape}, y: {y.shape}')
-        # Convert torch tensors to numpy arrays for compatibility with Flax/JAX
-        x, y = np.array(x), np.array(y)
-        print(f'Converted x: {x.shape}, y: {y.shape}')
+        break
