@@ -56,7 +56,7 @@ class Autoencoder(nn.Module):
     train: bool = True
 
     def setup(self):
-
+        ### Initialize the SINDy coefficients
         self.sindy_coefficients = self.param(
             "sindy_coefficients",
             nn.initializers.constant(1.0),

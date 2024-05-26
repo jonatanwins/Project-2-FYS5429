@@ -24,7 +24,7 @@ import jax.numpy as jnp
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from loss import create_loss_fn
+from loss import loss_fn_factory
 from sindy_utils import library_size
 
 class TrainState(train_state.TrainState):
@@ -35,7 +35,7 @@ class TrainState(train_state.TrainState):
 def update_mask(coefficients, threshold=0.1):
     return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
 
-class Trainer:
+class SINDy_trainer:
     def __init__(
         self,
         input_dim: int,
@@ -43,6 +43,7 @@ class Trainer:
         poly_order: int,
         widths: list,
         exmp_input: Any,
+        loss_factory: Callable[[int, int, bool, tuple, bool],Callable] = loss_fn_factory,
         optimizer_hparams: Dict[str, Any] = {},
         loss_params: Dict[str, Any] = {},
         seed: int = 42,
@@ -60,11 +61,16 @@ class Trainer:
             input_dim (int): Input dimension of the data.
             latent_dim (int): Dimension of the latent space.
             poly_order (int): Polynomial order for the SINDy library.
-            widths (list): List of layer widths for the encoder and decoder.
+            widths (list): List of layer widths for the encoder and decoder. Assumes the same for both.
+            exmp_input (Any): Example input to initialize the autoencoder model.
+
+            loss_factory (Callable[[int, int, bool, tuple, bool],Callable], optional): Factory function for the loss function. Defaults to create_loss_fn.
+            
             optimizer_hparams (Dict[str, Any], optional): Hyperparameters for the optimizer. Defaults to {}.
             loss_params (Dict[str, Any], optional): Parameters for the loss function. Defaults to {}.
             seed (int, optional): Random seed. Defaults to 42.
             logger_params (Dict[str, Any], optional): Parameters for the logger. Defaults to None.
+
             enable_progress_bar (bool, optional): Whether to enable progress bar. Defaults to True.
             debug (bool, optional): Whether to jit the loss functions. Defaults to False.
             check_val_every_n_epoch (int, optional): Check validation every n epoch. Defaults to 500.
@@ -80,6 +86,11 @@ class Trainer:
             'widths': widths,
         }
 
+        ### Setting up library size for the model parameters
+        lib_size = library_size(self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
+        self.model_hparams['lib_size'] = lib_size
+
+        ### Store model parameters
         self.optimizer_hparams = optimizer_hparams
         self.enable_progress_bar = enable_progress_bar
         self.debug = debug
@@ -103,26 +114,24 @@ class Trainer:
             "check_val_every_n_epoch": check_val_every_n_epoch,
             "update_mask_every_n_epoch": update_mask_every_n_epoch,
         }
-        ### Define the autoencoder model and create the loss function
-        self.init_model()
 
-        ### Initialize the model parameters and optimizer
-        self.init_model_state(exmp_input)
+        ### Define the autoencoder model
+        self._init_autoencoder()
+        ### Initialize the autoencoder, the SINDy coefficients, and define self.state with TrainState
+        self._init_model_state(exmp_input)
+
+        ### Define the loss function from the factory
+        self.loss_fn = jit(loss_factory(autoencoder = self.model, **self.loss_params))
+        
         self.create_jitted_functions()
-        ### Logger is intialized on training
     
-    def init_model(self):
+    def _init_autoencoder(self):
         """
-        Initialize the model components and compute the library size.
+        Initialize the autoencoder and add it to the loss params.
         """
-        # Calculate library size and saving to model hyperparameters
-        lib_size = library_size(self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
-        self.model_hparams['lib_size'] = lib_size
-
         # Initialize Encoder and Decoder
         encoder = Encoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
         decoder = Decoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
-        
 
         # Initialize Autoencoder
         self.model = Autoencoder(
@@ -134,8 +143,33 @@ class Trainer:
             decoder=decoder
         )
 
-        # Initialize the loss function
-        self.loss_fn = create_loss_fn(**self.loss_params)
+    def _init_model_state(self, exmp_input: Any):
+        """
+        Initialize the flax autoencoder model with the example input and random seed. Also initializes the SINDy coefficients
+
+        Args:
+            exmp_input (Any): Example input to initialize the model, with correct input shape
+
+        """
+        ### Split initialization rng
+        model_rng = random.PRNGKey(self.seed)
+        model_rng, init_rng = random.split(model_rng)
+
+        ### Set correct example input for initialization
+        exmp_input = [exmp_input] if not isinstance(exmp_input, (list, tuple)) else exmp_input
+        ### Initialize model parameters
+        variables = self.model.init(init_rng, exmp_input)
+
+        ### Optimizer state
+        self.state = TrainState(
+            step=0,
+            apply_fn=self.model.apply,
+            params=variables["params"],
+            rng=model_rng,
+            tx=None,
+            opt_state=None,
+            mask=variables['params']['sindy_coefficients'],
+        )
 
     def json_serializable(self, obj: dict):
         """
@@ -178,41 +212,7 @@ class Trainer:
             os.makedirs(os.path.join(log_dir, "metrics/"), exist_ok=True)
             with open(os.path.join(log_dir, "hparams.json"), "w") as f:
                 json.dump(self.hparams, f, indent=4)
-        self.log_dir = log_dir
-
-    def init_model_state(self, exmp_input: Any):
-        """
-        Initialize the flax model with the example input and random seed.
-
-        Args:
-            exmp_input (Any): Example input to initialize the model, with correct input shape
-
-        """
-        ### Split initialization rng
-        model_rng = random.PRNGKey(self.seed)
-        model_rng, init_rng = random.split(model_rng)
-
-        ### Set correct example input for initialization
-        exmp_input = [exmp_input] if not isinstance(exmp_input, (list, tuple)) else exmp_input
-        ### Initialize model parameters
-        variables = self.run_model_init(exmp_input, init_rng)
-
-        ### Optimizer state
-        self.state = TrainState(
-            step=0,
-            apply_fn=self.model.apply,
-            params=variables["params"],
-            rng=model_rng,
-            tx=None,
-            opt_state=None,
-            mask=variables['params']['sindy_coefficients'],
-        )
-
-    def run_model_init(self, exmp_input: Any, init_rng: Any) -> Dict:
-        """
-        Run the flax model init function to initialize the model parameters.
-        """
-        return self.model.init(init_rng, exmp_input)
+        self.log_dir = log_dir 
 
     def print_tabulate(self, exmp_input: Any):
         """
@@ -260,8 +260,8 @@ class Trainer:
             self.train_step = train_step
             self.eval_step = eval_step
         else:
-            self.train_step = jax.jit(train_step)
-            self.eval_step = jax.jit(eval_step)
+            self.train_step = jit(train_step)
+            self.eval_step = jit(eval_step)
 
     def create_functions(
         self,
@@ -272,17 +272,18 @@ class Trainer:
         """
         create training and evaluation functions for the model. Based on the loss function. 
         """
+        ### Defining value and grad function for the loss function
+        val_grad_fn = value_and_grad(self.loss_fn, has_aux=True, argnums=0)
+        ### Training step
+        ### The loss function takes in params, batch, and state.mask
         def train_step(state: TrainState, batch: Tuple):
-            def loss_fn(params):
-                return self.loss_fn(params, batch, self.model, state.mask)
 
-            val_grad_fn = value_and_grad(loss_fn, has_aux=True)
-            (loss, metrics), grads = val_grad_fn(state.params)
+            (loss, metrics), grads = val_grad_fn(state.params, batch, state.mask)
             state = state.apply_gradients(grads=grads)
             return state, metrics
 
         def eval_step(state: TrainState, batch: Any):
-            (loss, metrics) = self.loss_fn(state.params, batch, self.model, state.mask)
+            (loss, metrics) = self.loss_fn(state.params, batch, state.mask)
             return metrics
 
         return train_step, eval_step
@@ -292,7 +293,9 @@ class Trainer:
         train_loader: Iterator,
         val_loader: Iterator,
         test_loader: Optional[Iterator] = None,
-        num_epochs: int = 500,
+        num_epochs: int = 5000,
+        final_epochs: int = 500,
+
     ) -> Dict[str, Any]:
         """
         Train the model using the training and validation loaders. Optionally, evaluate the model on a test loader.
@@ -304,21 +307,16 @@ class Trainer:
             num_epochs (int, optional): Number of epochs to train the model. Defaults to 500.
         
         """
+        ### Initialize the logger
         self.init_logger(self.logger_params)
+
+        ### Initialize the optimizer
         self.init_optimizer(num_epochs, len(train_loader))
         best_eval_metrics = None
-        regularization_update_epoch = int(0.9 * num_epochs)
 
-
+        #### Initial training loop
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-
-            if epoch_idx == regularization_update_epoch:
-                new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
-                new_loss_params['regularization'] = False  # Update the copy with regularization=False
-                self.loss_fn = create_loss_fn(**new_loss_params)  # Create the new loss function
-                self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
-            
-
+            starting = time.time()
             train_metrics = self.train_epoch(train_loader)
             self.logger.log_metrics(train_metrics, step=epoch_idx)
 
@@ -331,10 +329,32 @@ class Trainer:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-
+            ending = time.time()
+            print(f"Time of epoch {epoch_idx}: {ending - starting}")
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
+        print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")
+        new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
+        new_loss_params['regularization'] = False  # Update the copy with regularization=False
+        self.loss_fn = loss_fn_factory(autoencoder=self.model, **new_loss_params)  # Create the new loss function
+        self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
+
+        #### Final training loop
+        print(f"Beggining final training loop.")
+        for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
+            train_metrics = self.train_epoch(train_loader)
+            self.logger.log_metrics(train_metrics, step=epoch_idx)
+
+            if epoch_idx % self.check_val_every_n_epoch == 0:
+                eval_metrics = self.eval_model(val_loader, log_prefix="val/")
+                self.logger.log_metrics(eval_metrics, step=epoch_idx + num_epochs)
+                self.save_metrics(f"eval_epoch_{str(epoch_idx + num_epochs).zfill(3)}", eval_metrics)
+                if self.is_new_model_better(eval_metrics, best_eval_metrics):
+                    best_eval_metrics = eval_metrics
+                    best_eval_metrics.update(train_metrics)
+                    self.save_model(step=epoch_idx+ num_epochs)
+                    self.save_metrics("best_eval", eval_metrics)
 
         if test_loader is not None:
             self.load_model()
@@ -362,7 +382,8 @@ class Trainer:
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps
         metrics = {key: metrics[key].item() for key in metrics}
-        metrics["epoch_time"] = time.time() - start_time
+        print(f"Inner training loop time: {time.time() - start_time}")
+        #metrics["epoch_time"] = time.time() - start_time
         return metrics
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:
@@ -471,7 +492,7 @@ class Trainer:
     
 
     @classmethod
-    def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'Trainer':
+    def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'SINDy_trainer':
         """
         Load the trainer from a checkpoint. Required for loading the model and optimizer state.
 
