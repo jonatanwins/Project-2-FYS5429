@@ -65,7 +65,7 @@ def loss_dynamics_z_single(params: ModelParams, encoder: nn.Module, x: Array, dx
     dx_in_z = jnp.dot(dphi_dx(params, x), dx_dt)
     return jnp.linalg.norm(dx_in_z - theta @ (mask * xi)) ** 2
 
-def loss_dynamics_x_second_order_single(params: ModelParams, decoder: nn.Module,    z: Array, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
+def loss_dynamics_x_second_order_single(decoderparams: ModelParams, decoder: nn.Module,  encoderparams:ModelParams ,encoder: nn.Module, z: Array, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
     """
     Second-order loss for the dynamics in x for a single data point
 
@@ -83,14 +83,22 @@ def loss_dynamics_x_second_order_single(params: ModelParams, decoder: nn.Module,
     Returns:
         Array -- Second-order loss dynamics in x
     """
-    def psi(params, z):
-        return decoder.apply({"params": params}, z)
+    def psi(z):
+        return decoder.apply({"params": decoderparams}, z)
+    
+    def phi(x):
+        return encoder.apply({"params": encoderparams}, x)
+    
+    dphi_dx = jacrev(phi)
 
-    dpsi_dz = jacfwd(psi, argnums=1)
-    ddpsi_dz2 = jacfwd(lambda z: dpsi_dz(params, z))
+    dx_in_z = dphi_dx(x) @ dx
 
-    ddx_sindy_recon = jnp.dot(ddpsi_dz2(z), theta @ (mask * xi))
-    return jnp.linalg.norm(ddx - ddx_sindy_recon) ** 2
+    dpsi_dz = jacfwd(psi)
+    ddpsi_dz2 = jacfwd(dpsi_dz)
+    
+    ddz_in_x = (ddpsi_dz2(z) @ dx_in_z) @ dx_in_z + dpsi_dz(z) @ (theta @ (mask * xi)) #chain rule (theta @ (mask * xi) is the SINDy reconstruction of ddz
+
+    return jnp.linalg.norm(ddz_in_x - ddx) ** 2
 
 def loss_dynamics_z_second_order_single(params: ModelParams, encoder: nn.Module, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
     """
@@ -109,19 +117,15 @@ def loss_dynamics_z_second_order_single(params: ModelParams, encoder: nn.Module,
     Returns:
         Array -- Second-order loss dynamics in z
     """     
-    def phi(params, x):
+    def phi(x):
         return encoder.apply({"params": params}, x)
 
-    J_f = jacrev(phi, argnums=1)
+    dphi_dx = jacrev(phi)
+    ddphi_dx2 = jacrev(dphi_dx) #second derivative/hessian
 
-    def y_derivative(x, dx, ddx):
-        J_f_x = J_f(params, x)
-        dJ_f_dx = jacrev(lambda x: J_f(params, x))(x)
-        dy_dt = (dJ_f_dx @ dx) @ dx + J_f_x @ ddx
-        return dy_dt
+    ddx_in_z = (ddphi_dx2(x) @ dx) @ dx + dphi_dx(x) @ ddx #chain rule
 
-    ddphi_dz2 = y_derivative(x, dx, ddx)
-    return jnp.linalg.norm(ddphi_dz2 - theta @ (mask * xi)) ** 2
+    return jnp.linalg.norm(ddx_in_z - theta @ (mask * xi)) ** 2
 
 def loss_regularization(xi: Array, mask: Array) -> Array:
     """
@@ -217,8 +221,9 @@ def base_loss_fn_second_order(params: ModelLayers, batch: Tuple, autoencoder: nn
 
     # Compute losses across the entire batch
     loss_reconstruction = jnp.mean(v_loss_recon(x, x_hat))
+
     loss_dynamics_x_part = jnp.mean(v_loss_dynamics_x(
-        decoder_params, decoder, z, x, dx, ddx, theta, xi, mask
+        decoder_params, decoder, encoder_params, encoder, z, x, dx, ddx, theta, xi, mask
     ))
     loss_dynamics_z_part = jnp.mean(v_loss_dynamics_z(
         encoder_params, encoder, x, dx, ddx, theta, xi, mask
@@ -259,7 +264,7 @@ def loss_fn_factory(latent_dim: int, poly_order: int, include_sine: bool = False
     v_loss_recon = vmap(loss_recon_single, in_axes=(0, 0))
 
     if second_order:
-        v_loss_dynamics_x = vmap(loss_dynamics_x_second_order_single, in_axes=(None, None, 0, None, None, 0, 0, None, None)) #args are params, decoder, z, x, dx, ddx, theta, xi, mask
+        v_loss_dynamics_x = vmap(loss_dynamics_x_second_order_single, in_axes=(None, None, None, None, 0, 0, 0, 0, 0, None, None)) #args are decoder params, decoder, encoder params, encoder, z, x, dx, ddx, theta, xi, mask
         v_loss_dynamics_z = vmap(loss_dynamics_z_second_order_single, in_axes=(None, None, 0, 0, 0, 0, None, None)) #args are params, encoder, x, dx, ddx, theta, xi, mask
         base_loss_fn = base_loss_fn_second_order
     else:
