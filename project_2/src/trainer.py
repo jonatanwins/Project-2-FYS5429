@@ -24,7 +24,7 @@ import jax.numpy as jnp
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from loss import create_loss_fn
+from loss import loss_fn_factory
 from sindy_utils import library_size
 
 
@@ -135,7 +135,7 @@ class Trainer:
         )
 
         # Initialize the loss function
-        self.loss_fn = create_loss_fn(**self.loss_params)
+        self.loss_fn = loss_fn_factory(**self.loss_params)
 
     def json_serializable(self, obj: dict):
         """
@@ -315,7 +315,7 @@ class Trainer:
                 # Update the copy with regularization=False
                 new_loss_params['regularization'] = False
                 # Create the new loss function
-                self.loss_fn = create_loss_fn(**new_loss_params)
+                self.loss_fn = loss_fn_factory(**new_loss_params)
                 # Recreate the jitted functions with the new loss function
                 self.create_jitted_functions()
             print("Epoch: ", epoch_idx)
