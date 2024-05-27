@@ -79,7 +79,7 @@ mp.set_start_method('spawn', force=True)
 # %%
 import sys
 sys.path.append('../')
-from lorenzTorchData import get_lorenz_dataloader, get_random_sample # type: ignore - goofy linting issue
+from lorenz.lorenzData import get_lorenz_dataloader, get_random_sample # type: ignore - goofy linting issue
 
 # Define all arguments as variables
 n_ics_training = 2048
