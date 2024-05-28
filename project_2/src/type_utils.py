@@ -1,4 +1,4 @@
-from typing import Dict, Union
+from typing import Callable, Dict, Union
 from jax import Array
 
 

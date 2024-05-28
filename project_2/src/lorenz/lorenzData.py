@@ -1,6 +1,6 @@
 import sys
-sys.append("../")
-from data_utils import NumpyLoader, get_random_sample
+sys.path.append("../")
+from data_utils import JaxDocsLoader, get_random_sample
 from lorenz.lorenzUtils import get_lorenz_train_data, get_lorenz_test_data
 import numpy as np
 from torch.utils.data import Dataset
@@ -46,7 +46,7 @@ def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, bat
         data = get_lorenz_test_data(n_ics, noise_strength)
 
     dataset = LorenzDataset(data)
-    loader = NumpyLoader(
+    loader = JaxDocsLoader(
         dataset,
         batch_size=batch_size,
         shuffle=train,

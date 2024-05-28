@@ -7,22 +7,21 @@ class Encoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'tanh'
-    initializer: str = 'glorot_uniform'
+    activation: str = 'sigmoid'
+    weight_initializer: str = 'xavier_uniform'
+    bias_initializer: str = 'constant'
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)
-        self.initializer_fn = getattr(initializers, self.initializer)()
-        self.bias_initializer_fn = initializers.zeros
+        self.weight_initializer_fn = getattr(initializers, self.weight_initializer)()
+        self.bias_initializer_fn = getattr(initializers, self.bias_initializer)(0)
 
     @nn.compact
     def __call__(self, x: Array):
         for width in self.widths:
-            x = nn.Dense(width, kernel_init=self.initializer_fn,
-                         bias_init=self.bias_initializer_fn)(x)
+            x = nn.Dense(width, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(x)
             x = self.activation_fn(x)
-        z = nn.Dense(self.latent_dim, kernel_init=self.initializer_fn,
-                     bias_init=self.bias_initializer_fn)(x)
+        z = nn.Dense(self.latent_dim, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(x)
         return z
 
 
@@ -30,22 +29,21 @@ class Decoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'tanh'
-    initializer: str = 'glorot_uniform'
+    activation: str = 'sigmoid'
+    weight_initializer: str = 'xavier_uniform'
+    bias_initializer: str = 'constant'
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)
-        self.initializer_fn = getattr(initializers, self.initializer)()
-        self.bias_initializer_fn = initializers.zeros
+        self.weight_initializer_fn = getattr(initializers, self.weight_initializer)()
+        self.bias_initializer_fn = getattr(initializers, self.bias_initializer)(0)
 
     @nn.compact
     def __call__(self, z):
         for width in reversed(self.widths):
-            z = nn.Dense(width, kernel_init=self.initializer_fn,
-                         bias_init=self.bias_initializer_fn)(z)
+            z = nn.Dense(width, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(z)
             z = self.activation_fn(z)
-        x_decode = nn.Dense(self.input_dim, kernel_init=self.initializer_fn,
-                            bias_init=self.bias_initializer_fn)(z)
+        x_decode = nn.Dense(self.input_dim, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(z)
         return x_decode
 
 
@@ -59,6 +57,7 @@ class Autoencoder(nn.Module):
     train: bool = True
 
     def setup(self):
+        ### Initialize the SINDy coefficients
         self.sindy_coefficients = self.param(
             "sindy_coefficients",
             nn.initializers.constant(1.0),
