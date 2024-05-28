@@ -2,6 +2,7 @@ from flax import linen as nn
 from flax.linen import initializers
 from jax import Array
 
+
 class Encoder(nn.Module):
     input_dim: int
     latent_dim: int
@@ -83,7 +84,8 @@ if __name__ == "__main__":
     x = jnp.ones((1, input_dim))
     encoder = Encoder(input_dim, latent_dim, widths)
     decoder = Decoder(input_dim, latent_dim, widths)
-    model = Autoencoder(input_dim, latent_dim, lib_size, widths, encoder, decoder)
+    model = Autoencoder(input_dim, latent_dim, lib_size,
+                        widths, encoder, decoder)
 
     # Split the key for consistent initialization
     key1, key2 = random.split(key)

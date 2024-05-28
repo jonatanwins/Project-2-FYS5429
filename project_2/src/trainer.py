@@ -27,9 +27,11 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from loss import loss_fn_factory
 from sindy_utils import library_size
 
+
 class TrainState(train_state.TrainState):
     mask: jnp.ndarray = None
     rng: Any = None
+
 
 @jit
 def update_mask(coefficients, threshold=0.1):
@@ -227,7 +229,7 @@ class SINDy_trainer:
         Args:
             num_epochs (int): Number of epochs to train the model (used for the learning rate schedule)
             num_steps_per_epoch (int): Number of steps per epoch (used for the learning rate schedule)
-        
+
         """
         hparams = copy(self.optimizer_hparams)
         optimizer_name = hparams.pop("optimizer", "adam")
@@ -240,7 +242,7 @@ class SINDy_trainer:
         else:
             assert False, f'Unknown optimizer "{opt_class}"'
         lr = hparams.pop("lr", 1e-3)
-        
+
         optimizer = opt_class(lr, **hparams)
         self.state = TrainState.create(
             apply_fn=self.state.apply_fn,
@@ -287,7 +289,7 @@ class SINDy_trainer:
             return metrics
 
         return train_step, eval_step
-
+    ### Maybe in future enable train step scheduler for this for varying step size
     def train_model(
         self,
         train_loader: Iterator,
@@ -356,12 +358,12 @@ class SINDy_trainer:
                     self.save_model(step=epoch_idx+ num_epochs)
                     self.save_metrics("best_eval", eval_metrics)
 
-        if test_loader is not None:
-            self.load_model()
-            test_metrics = self.eval_model(test_loader, log_prefix="test/")
-            self.logger.log_metrics(test_metrics, step=epoch_idx)
-            self.save_metrics("test", test_metrics)
-            best_eval_metrics.update(test_metrics)
+        # if test_loader is not None:
+        #     self.load_model()
+        #     test_metrics = self.eval_model(test_loader, log_prefix="test/")
+        #     self.logger.log_metrics(test_metrics, step=epoch_idx)
+        #     self.save_metrics("test", test_metrics)
+        #     best_eval_metrics.update(test_metrics)
         self.logger.finalize("success")
         
         return best_eval_metrics
@@ -378,6 +380,7 @@ class SINDy_trainer:
         num_train_steps = len(train_loader)
         start_time = time.time()
         for batch in train_loader:
+            print("training batch")
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps
@@ -399,11 +402,13 @@ class SINDy_trainer:
         num_elements = 0
         for batch in data_loader:
             step_metrics = self.eval_step(self.state, batch)
-            batch_size = batch[0].shape[0] if isinstance(batch, (list, tuple)) else batch.shape[0]
+            batch_size = batch[0].shape[0] if isinstance(
+                batch, (list, tuple)) else batch.shape[0]
             for key in step_metrics:
                 metrics[key] += step_metrics[key] * batch_size
             num_elements += batch_size
-        metrics = {log_prefix + key: (metrics[key] / num_elements).item() for key in metrics}
+        metrics = {log_prefix +
+                   key: (metrics[key] / num_elements).item() for key in metrics}
         return metrics
 
     def is_new_model_better(self, new_metrics: Dict[str, Any], old_metrics: Dict[str, Any]) -> bool:
@@ -429,7 +434,6 @@ class SINDy_trainer:
 
         # If for some reason the loss is not in the metrics, return False as a fallback
         assert False, f"No known metrics to log on: {new_metrics}"
-
 
     def tracker(self, iterator: Iterator, **kwargs) -> Iterator:
         """
@@ -466,7 +470,8 @@ class SINDy_trainer:
         absolute_log_dir = os.path.abspath(self.log_dir)
         checkpoints.save_checkpoint(
             ckpt_dir=absolute_log_dir,
-            target={"params": self.state.params, "opt_state": self.state.opt_state},
+            target={"params": self.state.params,
+                    "opt_state": self.state.opt_state},
             step=step,
             overwrite=True,
         )
@@ -476,8 +481,6 @@ class SINDy_trainer:
         }
         with open(os.path.join(absolute_log_dir, 'model_state.pkl'), 'wb') as f:
             pickle.dump(model_state, f)
-
-
 
     def bind_model(self):
         """
@@ -489,7 +492,6 @@ class SINDy_trainer:
         """
         params = {"params": self.state.params}
         return self.model.bind(params)
-    
 
     @classmethod
     def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'SINDy_trainer':
@@ -499,14 +501,14 @@ class SINDy_trainer:
         Args:
             checkpoint (str): Path to the checkpoint
             exmp_input (Any): Example input to initialize the model
-        
+
         Returns:
             Trainer: Trainer object
         """
         checkpoint = os.path.abspath(checkpoint)
         hparams_file = os.path.join(checkpoint, "hparams.json")
         assert os.path.isfile(hparams_file), "Could not find hparams file"
-        
+
         with open(hparams_file, "r") as f:
             hparams = json.load(f)
 
@@ -523,13 +525,15 @@ class SINDy_trainer:
             logger_params=hparams.get("logger_params", {}),
             enable_progress_bar=hparams.get("enable_progress_bar", True),
             debug=hparams.get("debug", False),
-            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
-            update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500)
+            check_val_every_n_epoch=hparams.get(
+                "check_val_every_n_epoch", 500),
+            update_mask_every_n_epoch=hparams.get(
+                "update_mask_every_n_epoch", 500)
         )
 
         # Load the model and optimizer state from the checkpoint
         trainer.load_model(checkpoint)
-        
+
         return trainer
 
     def load_model(self, checkpoint: str):
@@ -542,9 +546,8 @@ class SINDy_trainer:
         checkpoint = os.path.abspath(checkpoint)
         with open(os.path.join(checkpoint, 'model_state.pkl'), 'rb') as f:
             model_state = pickle.load(f)
-        
+
         self.state = self.state.replace(
             params=model_state['params'],
             opt_state=model_state['opt_state'],
         )
-

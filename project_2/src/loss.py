@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import jacobian, vmap
+from jax import jacobian, vmap, jacfwd, jacrev
 from sindy_utils import create_sindy_library
 from typing import Tuple
 from jax import Array
@@ -240,41 +240,97 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         return loss_fn_with_reg
     else:
         return base_loss_fn
+    
+def loss_dynamics_x_second_order_single(decoderparams: ModelParams, decoder: nn.Module,  encoderparams:ModelParams ,encoder: nn.Module, z: Array, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
+    """
+    Second-order loss for the dynamics in x for a single data point
+
+    Arguments:
+        params {ModelParams} -- Model parameters
+        decoder {nn.Module} -- Decoder
+        z {Array} -- Latent space
+        x {Array} -- Original data
+        dx {Array} -- First derivative of x
+        ddx {Array} -- Second derivative of x
+        theta {Array} -- SINDy library
+        xi {Array} -- SINDy coefficients
+        mask {Array} -- Mask
+
+    Returns:
+        Array -- Second-order loss dynamics in x
+    """
+    def psi(z):
+        return decoder.apply({"params": decoderparams}, z)
+    
+    def phi(x):
+        return encoder.apply({"params": encoderparams}, x)
+    
+    dphi_dx = jacrev(phi)
+
+    dx_in_z = dphi_dx(x) @ dx
+
+    dpsi_dz = jacfwd(psi)
+    ddpsi_dz2 = jacfwd(dpsi_dz)
+    
+    ddz_in_x = (ddpsi_dz2(z) @ dx_in_z) @ dx_in_z + dpsi_dz(z) @ (theta @ (mask * xi)) #chain rule (theta @ (mask * xi) is the SINDy reconstruction of ddz
+
+    return jnp.linalg.norm(ddz_in_x - ddx) ** 2
+
+def loss_dynamics_z_second_order_single(params: ModelParams, encoder: nn.Module, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
+    """
+    Second-order loss for the dynamics in z for a single data point
+
+    Arguments:
+        params {ModelParams} -- Model parameters
+        encoder {nn.Module} -- Encoder
+        x {Array} -- Original data
+        dx {Array} -- First derivative of x
+        ddx {Array} -- Second derivative of x
+        theta {Array} -- SINDy library
+        xi {Array} -- SINDy coefficients
+        mask {Array} -- Mask
+
+    Returns:
+        Array -- Second-order loss dynamics in z
+    """     
+    def phi(x):
+        return encoder.apply({"params": params}, x)
+
+    dphi_dx = jacrev(phi)
+    ddphi_dx2 = jacrev(dphi_dx) #second derivative/hessian
+
+    ddx_in_z = (ddphi_dx2(x) @ dx) @ dx + dphi_dx(x) @ ddx #chain rule
+
+    return jnp.linalg.norm(ddx_in_z - theta @ (mask * xi)) ** 2
+
 
 
 if __name__ == "__main__":
-    # lets thest the loss function
-    from jax import random, tree_map
-    import jax.numpy as jnp
-    from sindy_utils import library_size
-    from autoencoder import Autoencoder, Encoder, Decoder
-    from flax import linen as nn
-    from flax.core.frozen_dict import freeze
+    from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
+    from sindy_utils import library_size
+    from jax import random
     import optax
 
     key = random.PRNGKey(0)
     input_dim = 128
     latent_dim = 3
-    lib_size = library_size(3, 3)
     poly_order = 3
-    
+    lib_size = library_size(latent_dim, poly_order)
 
-    encoder = Encoder(input_dim=input_dim,
-                      latent_dim=latent_dim, widths=[32, 32])
-    decoder = Decoder(input_dim=input_dim,
-                      latent_dim=latent_dim, widths=[32, 32])
-    autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, lib_size=lib_size, widths=[
-        32, 32], encoder=encoder, decoder=decoder)
+    encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
+    decoder = Decoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
+    autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
 
-    # create some random data
+    # Create some random data
     key, subkey = random.split(key)
-    features = random.normal(subkey, (10, input_dim))
+    x = random.normal(subkey, (10, input_dim))
 
     key, subkey = random.split(key)
-    target = random.normal(subkey, (10, input_dim))
+    dx = random.normal(subkey, (10, input_dim))
+    ddx = random.normal(subkey, (10, input_dim))
 
-    variables = autoencoder.init(subkey, features)
+    variables = autoencoder.init(subkey, x)
 
     state = TrainState(
         step=0,
