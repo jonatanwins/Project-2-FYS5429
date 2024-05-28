@@ -123,7 +123,7 @@ class SINDy_trainer:
         self._init_model_state(exmp_input)
 
         ### Define the loss function from the factory
-        self.loss_fn = jit(loss_factory(autoencoder = self.model, **self.loss_params))
+        self.loss_fn = loss_factory(autoencoder = self.model, **self.loss_params)
         
         self.create_jitted_functions()
     
