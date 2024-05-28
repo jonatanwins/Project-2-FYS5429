@@ -380,7 +380,7 @@ class SINDy_trainer:
         num_train_steps = len(train_loader)
         start_time = time.time()
         for batch in train_loader:
-            print("training batch")
+            #print("training batch")
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps
