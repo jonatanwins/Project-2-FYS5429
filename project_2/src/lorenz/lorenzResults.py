@@ -5,7 +5,7 @@ sys.path.append("../")
 from trainer import Trainer
 import jax.numpy as jnp
 from autoencoder import Autoencoder
-from lorenzUtils import generate_lorenz_data
+from lorenzData import generate_lorenz_train_data
 import matplotlib.pyplot as plt
 import numpy as np
 

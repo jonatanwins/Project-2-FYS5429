@@ -1,8 +1,7 @@
 import sys
 sys.path.append("../")
-from data_utils import JaxDocsLoader, get_random_sample
-from lorenz.lorenzUtils import get_lorenz_train_data, get_lorenz_test_data
-import numpy as np
+from data_utils import JaxDocsLoader
+from lorenz.lorenzData import get_lorenz_train_data, get_lorenz_test_data
 from torch.utils.data import Dataset
 
 class LorenzTrainDataset(Dataset):
@@ -46,6 +45,7 @@ class LorenzTestDataset(Dataset):
 
 
 if __name__ == "__main__":
+    from data_utils import get_random_sample
     # Generate training data
     train_data = get_lorenz_train_data(2)
     train_dataset = LorenzTrainDataset(train_data)
