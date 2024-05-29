@@ -1,83 +1,244 @@
+"""
+Large parts of this module is fetched from the SindyAutoencoder repository
+https://github.com/kpchamp/SindyAutoencoders/blob/master/examples/lorenz/example_lorenz.py
+
+Some slight modifications where made to troubleshoot memory bugs and modernize the code
+"""
+
+
 import sys
 sys.path.append("../")
-from data_utils import JaxDocsLoader, get_random_sample
-from lorenz.lorenzUtils import get_lorenz_train_data, get_lorenz_test_data
+from sindy_utils import library_size
 import numpy as np
-from torch.utils.data import Dataset
+from scipy.integrate import solve_ivp
+from scipy.special import legendre
 
-class LorenzDataset(Dataset):
+def lorenz(t, z, sigma=10, beta=8/3, rho=28):
+    x, y, z = z
+    dx = sigma * (y - x)
+    dy = x * (rho - z) - y
+    dz = x * y - beta * z
+    return [dx, dy, dz]
+
+def simulate_lorenz(z0, t, sigma=10.0, beta=8 / 3, rho=28.0):
     """
-    PyTorch dataset for the Lorenz dataset.
+    Simulate the Lorenz dynamics.
 
     Arguments:
-        data - Dictionary containing the Lorenz dataset.
+        z0 - Initial condition in the form of a 3-value list or array.
+        t - Array of time points at which to simulate.
+        sigma, beta, rho - Lorenz parameters
+
+    Returns:
+        z, dz - Arrays of the trajectory values and their 1st derivatives.
+    """
+    f = lambda t, z: lorenz(t, z, sigma=sigma, beta=beta, rho=rho)
+
+    sol = solve_ivp(f, [t[0], t[-1]], z0, t_eval=t, vectorized=True)
+
+    z = sol.y.T
+
+    dt = t[1] - t[0]
+    dz = np.zeros(z.shape)
+    for i in range(t.size):
+        dz[i] = f(t[i], z[i])
+    return z, dz
+
+def generate_lorenz_data(
+    ics, t, n_points, linear=True, normalization=None, sigma=10, beta=8 / 3, rho=28
+):
+    """
+    Generate high-dimensional Lorenz data set.
+
+    Arguments:
+        ics - Nx3 array of N initial conditions
+        t - array of time points over which to simulate
+        n_points - size of the high-dimensional dataset created
+        linear - Boolean value. If True, high-dimensional dataset is a linear combination
+        of the Lorenz dynamics. If False, the dataset also includes cubic modes.
+        normalization - Optional 3-value array for rescaling the 3 Lorenz variables.
+        sigma, beta, rho - Parameters of the Lorenz dynamics.
+
+    Returns:
+        data - Dictionary containing elements of the dataset. This includes the time points (t),
+        spatial mapping (y_spatial), high-dimensional modes used to generate the full dataset
+        (modes), low-dimensional Lorenz dynamics (z, along with 1st derivatives dz),
+        high-dimensional dataset (x, along with 1st derivatives dx), and
+        the true Lorenz coefficient matrix for SINDy.
     """
 
-    def __init__(self, data):
-        self.x = data["x"]
-        self.dx = data["dx"]
+    n_ics = ics.shape[0]
+    n_steps = t.size
 
-    def __len__(self):
-        return self.x.shape[0]
+    d = 3
+    z = np.zeros((n_ics, n_steps, d))
+    dz = np.zeros(z.shape)
+    for i in range(n_ics):
+        z[i], dz[i] = simulate_lorenz(
+            ics[i], t, sigma=sigma, beta=beta, rho=rho
+        )
 
-    def __getitem__(self, idx):
-        return self.x[idx], self.dx[idx]
+    if normalization is not None:
+        z *= normalization
+        dz *= normalization
 
-def get_lorenz_dataloader(n_ics: int, train=True, noise_strength: float = 0, batch_size: int = 128, num_workers: int = 0, pin_memory: bool = False, drop_last: bool = False, timeout: int = 0, worker_init_fn = None):
+    n = n_points
+    L = 1
+    y_spatial = np.linspace(-L, L, n)
+
+    modes = np.zeros((2 * d, n))
+    for i in range(2 * d):
+        modes[i] = legendre(i)(y_spatial)
+    x1 = np.zeros((n_ics, n_steps, n))
+    x2 = np.zeros((n_ics, n_steps, n))
+    x3 = np.zeros((n_ics, n_steps, n))
+    x4 = np.zeros((n_ics, n_steps, n))
+    x5 = np.zeros((n_ics, n_steps, n))
+    x6 = np.zeros((n_ics, n_steps, n))
+
+    x = np.zeros((n_ics, n_steps, n))
+    dx = np.zeros(x.shape)
+    for i in range(n_ics):
+        for j in range(n_steps):
+            x1[i, j] = modes[0] * z[i, j, 0]
+            x2[i, j] = modes[1] * z[i, j, 1]
+            x3[i, j] = modes[2] * z[i, j, 2]
+            x4[i, j] = modes[3] * z[i, j, 0] ** 3
+            x5[i, j] = modes[4] * z[i, j, 1] ** 3
+            x6[i, j] = modes[5] * z[i, j, 2] ** 3
+
+            x[i, j] = x1[i, j] + x2[i, j] + x3[i, j]
+            if not linear:
+                x[i, j] += x4[i, j] + x5[i, j] + x6[i, j]
+
+            dx[i, j] = (
+                modes[0] * dz[i, j, 0] + modes[1] *
+                dz[i, j, 1] + modes[2] * dz[i, j, 2]
+            )
+            if not linear:
+                dx[i, j] += (
+                    modes[3] * 3 * (z[i, j, 0] ** 2) * dz[i, j, 0]
+                    + modes[4] * 3 * (z[i, j, 1] ** 2) * dz[i, j, 1]
+                    + modes[5] * 3 * (z[i, j, 2] ** 2) * dz[i, j, 2]
+                )
+
+    if normalization is None:
+        sindy_coefficients = lorenz_coefficients(
+            [1, 1, 1], sigma=sigma, beta=beta, rho=rho
+        )
+    else:
+        sindy_coefficients = lorenz_coefficients(
+            normalization, sigma=sigma, beta=beta, rho=rho
+        )
+
+    data = {}
+    data["t"] = t
+    data["y_spatial"] = y_spatial
+    data["modes"] = modes
+    data["x"] = x
+    data["dx"] = dx
+    data["z"] = z
+    data["dz"] = dz
+    data["sindy_coefficients"] = sindy_coefficients.astype(np.float32)
+
+    return data
+
+def get_lorenz_train_data(n_ics, noise_strength=0):
     """
-    Get a PyTorch DataLoader for the Lorenz dataset.
+    Generate a set of Lorenz training data for multiple random initial conditions.
 
     Arguments:
         n_ics - Integer specifying the number of initial conditions to use.
         noise_strength - Amount of noise to add to the data.
-        batch_size - Batch size to use in the DataLoader.
-        num_workers - Number of workers to use in the DataLoader.
-        pin_memory - If True, the data loader will copy Tensors into CUDA pinned memory before returning them.
-        drop_last - If True, the DataLoader will drop the last incomplete batch.
-        timeout - Timeout value for collecting a batch from workers.
-        worker_init_fn - Function to be called on each worker subprocess.
-    
+
     Return:
-        data_loader - PyTorch DataLoader for the Lorenz dataset.
+        data - Dictionary containing elements of the dataset.
     """
-    if train:
-        data = get_lorenz_train_data(n_ics, noise_strength)
-    else:
-        data = get_lorenz_test_data(n_ics, noise_strength)
+    t = np.arange(0, 5, 0.02)
+    n_steps = t.size
+    input_dim = 128
 
-    dataset = LorenzDataset(data)
-    loader = JaxDocsLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=train,
-        num_workers=num_workers,
-        pin_memory=pin_memory,
-        drop_last=drop_last,
-        timeout=timeout,
-        worker_init_fn=worker_init_fn
-    )
-    return loader
+    ic_means = np.array([0, 0, 25])
+    ic_widths = 2 * np.array([36, 48, 41])
 
-def get_random_sample(data_loader):
+    # Generate initial conditions
+    ics = ic_widths * (np.random.rand(n_ics, 3) - 0.5) + ic_means
+
+    # Generate Lorenz data with the specified initial conditions
+    data = generate_lorenz_data(ics, t, input_dim, noise_strength)
+    x = data["x"].copy()
+    dx = data["dx"].copy()
+    del data
+    x = x.reshape(
+        (-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
+    dx = dx.reshape(
+        (-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
+
+    del t, n_steps, input_dim, ic_means, ic_widths
+
+    return {'x': x, 'dx': dx}
+
+def get_lorenz_test_data(n_ics, noise_strength=0):
     """
-    Get a random sample from the DataLoader.
+    Generate a set of Lorenz test data for multiple random initial conditions.
 
     Arguments:
-        data_loader - PyTorch DataLoader.
+        n_ics - Integer specifying the number of initial conditions to use.
+        noise_strength - Amount of noise to add to the data.
 
     Return:
-        A random sample (x, dx) from the dataset.
+        data - Dictionary containing elements of the dataset.
     """
-    dataset = data_loader.dataset
-    random_idx = np.random.randint(0, len(dataset))
-    return dataset[random_idx]
+    t = np.arange(0, 5, 0.02)
+    n_steps = t.size
+    input_dim = 128
+
+    ic_means = np.array([0, 0, 25])
+    ic_widths = 2 * np.array([36, 48, 41])
+
+    # Generate initial conditions
+    ics = ic_widths * (np.random.rand(n_ics, 3) - 0.5) + ic_means
+
+    # Generate Lorenz data with the specified initial conditions
+    data = generate_lorenz_data(
+        ics, t, input_dim, linear=False, normalization=np.array([1 / 40, 1 / 40, 1 / 40])
+    )
+
+    data["x"] = data["x"].reshape(
+        (-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
+    data["dx"] = data["dx"].reshape(
+        (-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
+
+    return data
+
+def lorenz_coefficients(normalization, poly_order=3, sigma=10.0, beta=8 / 3, rho=28.0):
+    """
+    Generate the SINDy coefficient matrix for the Lorenz system.
+
+    Arguments:
+        normalization - 3-element list of array specifying scaling of each Lorenz variable
+        poly_order - Polynomial order of the SINDy model.
+        sigma, beta, rho - Parameters of the Lorenz system
+    """
+    Xi = np.zeros((library_size(3, poly_order), 3))
+    Xi[1, 0] = -sigma
+    Xi[2, 0] = sigma * normalization[0] / normalization[1]
+    Xi[1, 1] = rho * normalization[1] / normalization[0]
+    Xi[2, 1] = -1
+    Xi[6, 1] = -normalization[1] / (normalization[0] * normalization[2])
+    Xi[3, 2] = -beta
+    Xi[5, 2] = normalization[2] / (normalization[0] * normalization[1])
+    return Xi
 
 if __name__ == "__main__":
-    # See what one batch from the data loader looks like
-    data_loader = get_lorenz_dataloader(2, batch_size=20, num_workers=0, train=False)
-    # Get one batch from the data loader
-    x, dx = next(iter(data_loader))
-    print(x.shape, dx.shape)
-    # Get a random sample from the data loader
-    random_x, random_dx = get_random_sample(data_loader)
-    print(random_x.shape, random_dx.shape)
+    # Test the get_lorenz_train_data function
+    training_data = get_lorenz_train_data(2)
+    print("Training Data Keys:", training_data.keys())
+    print(f"x shape: {training_data['x'].shape}, dx shape: {training_data['dx'].shape}")
+    
+    # Test the get_lorenz_test_data function
+    test_data = get_lorenz_test_data(2)
+    print("Test Data Keys:", test_data.keys())
+    print(f"x shape: {test_data['x'].shape}, dx shape: {test_data['dx'].shape}")
+
+    print(f"z shape: {test_data['z'].shape};  dz shape: {test_data['dz'].shape}")

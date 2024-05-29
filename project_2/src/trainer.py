@@ -37,6 +37,7 @@ class TrainState(train_state.TrainState):
 def update_mask(coefficients, threshold=0.1):
     return jnp.where(jnp.abs(coefficients) >= threshold, 1, 0)
 
+
 class SINDy_trainer:
     def __init__(
         self,
@@ -45,7 +46,10 @@ class SINDy_trainer:
         poly_order: int,
         widths: list,
         exmp_input: Any,
-        loss_factory: Callable[[int, int, bool, tuple, bool],Callable] = loss_fn_factory,
+        activation: str = 'tanh',
+        weight_initializer: str = 'xavier_uniform',
+        bias_initializer: str = 'zeros',
+        loss_factory: Callable[[int, int, bool, tuple, bool], Callable] = loss_fn_factory,
         optimizer_hparams: Dict[str, Any] = {},
         loss_params: Dict[str, Any] = {},
         seed: int = 42,
@@ -54,6 +58,7 @@ class SINDy_trainer:
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
         update_mask_every_n_epoch: int = 500,
+        coefficent_threshold: float = 0.1,
     ):
         """
         Trainer module for holding all parts required for training a model. 
@@ -65,18 +70,19 @@ class SINDy_trainer:
             poly_order (int): Polynomial order for the SINDy library.
             widths (list): List of layer widths for the encoder and decoder. Assumes the same for both.
             exmp_input (Any): Example input to initialize the autoencoder model.
-
-            loss_factory (Callable[[int, int, bool, tuple, bool],Callable], optional): Factory function for the loss function. Defaults to create_loss_fn.
-            
+            activation (str): Activation function for the encoder and decoder. Defaults to 'tanh'.
+            weight_initializer (str): Weight initializer for the encoder and decoder. Defaults to 'xavier_uniform'.
+            bias_initializer (str): Bias initializer for the encoder and decoder. Defaults to 'zeros'.
+            loss_factory (Callable[[int, int, bool, tuple, bool], Callable], optional): Factory function for the loss function. Defaults to loss_fn_factory.
             optimizer_hparams (Dict[str, Any], optional): Hyperparameters for the optimizer. Defaults to {}.
             loss_params (Dict[str, Any], optional): Parameters for the loss function. Defaults to {}.
             seed (int, optional): Random seed. Defaults to 42.
             logger_params (Dict[str, Any], optional): Parameters for the logger. Defaults to None.
-
             enable_progress_bar (bool, optional): Whether to enable progress bar. Defaults to True.
             debug (bool, optional): Whether to jit the loss functions. Defaults to False.
             check_val_every_n_epoch (int, optional): Check validation every n epoch. Defaults to 500.
             update_mask_every_n_epoch (int, optional): Update mask every n epoch. Defaults to 500.
+            coefficent_threshold (float, optional): Threshold for updating the mask. Defaults to 0.1.
         """
         self.seed = seed
 
@@ -86,6 +92,9 @@ class SINDy_trainer:
             'latent_dim': latent_dim,
             'poly_order': poly_order,
             'widths': widths,
+            'activation': activation,
+            'weight_initializer': weight_initializer,
+            'bias_initializer': bias_initializer,
         }
 
         ### Setting up library size for the model parameters
@@ -103,18 +112,19 @@ class SINDy_trainer:
 
         # Store hyperparameters for trainer and model
         self.hparams = {
-            "input_dim": input_dim,
-            "latent_dim": latent_dim,
-            "poly_order": poly_order,
-            "widths": widths,
-            "optimizer_hparams": optimizer_hparams,
-            "loss_params": loss_params,
-            "seed": seed,
-            "logger_params": logger_params,
-            "enable_progress_bar": enable_progress_bar,
-            "debug": debug,
-            "check_val_every_n_epoch": check_val_every_n_epoch,
-            "update_mask_every_n_epoch": update_mask_every_n_epoch,
+                "input_dim": input_dim,
+                "latent_dim": latent_dim,
+                "poly_order": poly_order,
+                "widths": widths,
+                "activation": activation,
+                "weight_initializer": weight_initializer,
+                "bias_initializer": bias_initializer,
+                "optimizer_hparams": optimizer_hparams,
+                "loss_params": loss_params,
+                "update_mask_every_n_epoch": update_mask_every_n_epoch,
+                "coefficent_threshold": coefficent_threshold,
+                "update_mask_every_n_epoch": update_mask_every_n_epoch,
+                "coefficent_threshold": coefficent_threshold,
         }
 
         ### Define the autoencoder model
@@ -123,7 +133,7 @@ class SINDy_trainer:
         self._init_model_state(exmp_input)
 
         ### Define the loss function from the factory
-        self.loss_fn = loss_factory(autoencoder = self.model, **self.loss_params)
+        self.loss_fn = loss_factory(autoencoder=self.model, **self.loss_params)
         
         self.create_jitted_functions()
     
@@ -173,20 +183,6 @@ class SINDy_trainer:
             mask=variables['params']['sindy_coefficients'],
         )
 
-    def json_serializable(self, obj: dict):
-        """
-        Convert the model parameters to a JSON serializable format. For storing the model.
-        """
-        for key, value in obj.items():
-            if isinstance(value, nn.Module):
-                obj[key] = {
-                    "class": value.__class__.__name__,
-                    "params": {k: getattr(value, k) for k in value.__annotations__.keys()}
-                }
-            elif isinstance(value, dict):
-                obj[key] = self.json_serializable(value)
-        return obj
-
     def init_logger(self, logger_params: Optional[Dict] = None):
         """
         Initialize the tensorboard logger for logging the training metrics and model checkpoints.
@@ -222,35 +218,54 @@ class SINDy_trainer:
         """
         print(self.model.tabulate(random.PRNGKey(0), exmp_input))
 
-    def init_optimizer(self, num_epochs: int, num_steps_per_epoch: int):
+    def init_optimizer(self,
+                       num_epochs : int,
+                       num_steps_per_epoch : int):
         """
-        Initialize the optimizer with the hyperparameters. Defaults to Adam.
+        Initializes the optimizer and learning rate scheduler.
 
         Args:
-            num_epochs (int): Number of epochs to train the model (used for the learning rate schedule)
-            num_steps_per_epoch (int): Number of steps per epoch (used for the learning rate schedule)
-
+          num_epochs: Number of epochs the model will be trained for.
+          num_steps_per_epoch: Number of training steps per epoch.
         """
         hparams = copy(self.optimizer_hparams)
-        optimizer_name = hparams.pop("optimizer", "adam")
-        if optimizer_name.lower() == "adam":
+
+        # Initialize optimizer
+        optimizer_name = hparams.pop('optimizer', 'adamw')
+        if optimizer_name.lower() == 'adam':
             opt_class = optax.adam
-        elif optimizer_name.lower() == "adamw":
+        elif optimizer_name.lower() == 'adamw':
             opt_class = optax.adamw
-        elif optimizer_name.lower() == "sgd":
+        elif optimizer_name.lower() == 'sgd':
             opt_class = optax.sgd
         else:
             assert False, f'Unknown optimizer "{opt_class}"'
-        lr = hparams.pop("lr", 1e-3)
-
-        optimizer = opt_class(lr, **hparams)
-        self.state = TrainState.create(
-            apply_fn=self.state.apply_fn,
-            params=self.state.params,
-            tx=optimizer,
-            rng=self.state.rng,
-            mask=self.state.mask,
+        # Initialize learning rate scheduler
+        # A cosine decay scheduler is used, but others are also possible
+        lr = hparams.pop('lr', 1e-3)
+        warmup = hparams.pop('warmup', 0)
+        lr_schedule = optax.warmup_cosine_decay_schedule(
+            init_value=0.0,
+            peak_value=lr,
+            warmup_steps=warmup,
+            decay_steps=int(num_epochs * num_steps_per_epoch),
+            end_value=0.01 * lr
         )
+        # Clip gradients at max value, and evt. apply weight decay
+        transf = [optax.clip_by_global_norm(hparams.pop('gradient_clip', 1.0))]
+        if opt_class == optax.sgd and 'weight_decay' in hparams:  # wd is integrated in adamw
+            transf.append(optax.add_decayed_weights(hparams.pop('weight_decay', 0.0)))
+        optimizer = optax.chain(
+            *transf,
+            opt_class(lr_schedule, **hparams)
+        )
+        # Initialize training state
+        self.state = TrainState.create(apply_fn=self.state.apply_fn,
+                                       params=self.state.params,
+                                       batch_stats=self.state.batch_stats,
+                                       tx=optimizer,
+                                       rng=self.state.rng)
+
 
     def create_jitted_functions(self):
         """
@@ -294,10 +309,8 @@ class SINDy_trainer:
         self,
         train_loader: Iterator,
         val_loader: Iterator,
-        test_loader: Optional[Iterator] = None,
         num_epochs: int = 5000,
         final_epochs: int = 500,
-
     ) -> Dict[str, Any]:
         """
         Train the model using the training and validation loaders. Optionally, evaluate the model on a test loader.
@@ -313,7 +326,7 @@ class SINDy_trainer:
         self.init_logger(self.logger_params)
 
         ### Initialize the optimizer
-        self.init_optimizer(num_epochs, len(train_loader))
+        self.init_optimizer(num_epochs + final_epochs, len(train_loader))
         best_eval_metrics = None
 
         #### Initial training loop
@@ -331,11 +344,11 @@ class SINDy_trainer:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-            ending = time.time()
-            print(f"Time of epoch {epoch_idx}: {ending - starting}")
+
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
+            
         print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")
         new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
         new_loss_params['regularization'] = False  # Update the copy with regularization=False
@@ -343,30 +356,30 @@ class SINDy_trainer:
         self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
 
         #### Final training loop
-        print(f"Beggining final training loop.")
+        print(f"Beginning final training loop.")
         for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
             train_metrics = self.train_epoch(train_loader)
-            self.logger.log_metrics(train_metrics, step=epoch_idx)
+            overall_epoch_idx = epoch_idx + num_epochs  
+            self.logger.log_metrics(train_metrics, step=overall_epoch_idx)
 
             if epoch_idx % self.check_val_every_n_epoch == 0:
                 eval_metrics = self.eval_model(val_loader, log_prefix="val/")
-                self.logger.log_metrics(eval_metrics, step=epoch_idx + num_epochs)
-                self.save_metrics(f"eval_epoch_{str(epoch_idx + num_epochs).zfill(3)}", eval_metrics)
+                self.logger.log_metrics(eval_metrics, step=overall_epoch_idx)
+                self.save_metrics(f"eval_epoch_{str(overall_epoch_idx).zfill(3)}", eval_metrics)
                 if self.is_new_model_better(eval_metrics, best_eval_metrics):
                     best_eval_metrics = eval_metrics
                     best_eval_metrics.update(train_metrics)
-                    self.save_model(step=epoch_idx+ num_epochs)
+                    self.save_model(step=overall_epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-
-        # if test_loader is not None:
-        #     self.load_model()
-        #     test_metrics = self.eval_model(test_loader, log_prefix="test/")
-        #     self.logger.log_metrics(test_metrics, step=epoch_idx)
-        #     self.save_metrics("test", test_metrics)
-        #     best_eval_metrics.update(test_metrics)
+            
+            if epoch_idx % self.update_mask_every_n_epoch == 0:
+                new_mask = update_mask(self.state.params["sindy_coefficients"])
+                self.state = self.state.replace(mask=new_mask)
+        
         self.logger.finalize("success")
         
         return best_eval_metrics
+
 
     def train_epoch(self, train_loader: Iterator) -> Dict[str, Any]:
         """
@@ -378,14 +391,14 @@ class SINDy_trainer:
         """
         metrics = defaultdict(float)
         num_train_steps = len(train_loader)
-        start_time = time.time()
+        #start_time = time.time()
         for batch in train_loader:
             #print("training batch")
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps
         metrics = {key: metrics[key].item() for key in metrics}
-        print(f"Inner training loop time: {time.time() - start_time}")
+        #print(f"Inner training loop time: {time.time() - start_time}")
         #metrics["epoch_time"] = time.time() - start_time
         return metrics
 
@@ -482,17 +495,6 @@ class SINDy_trainer:
         with open(os.path.join(absolute_log_dir, 'model_state.pkl'), 'wb') as f:
             pickle.dump(model_state, f)
 
-    def bind_model(self):
-        """
-        Flax specific method to bind the model with the current parameters. 
-        This way model can be called as a function with the current parameters. self.model(x)
-
-        Returns:
-            Any: Model with the current parameters
-        """
-        params = {"params": self.state.params}
-        return self.model.bind(params)
-
     @classmethod
     def load_from_checkpoint(cls, checkpoint: str, exmp_input: Any) -> 'SINDy_trainer':
         """
@@ -519,22 +521,26 @@ class SINDy_trainer:
             poly_order=hparams["poly_order"],
             widths=hparams["widths"],
             exmp_input=exmp_input,
+            activation=hparams["activation"],
+            weight_initializer=hparams["weight_initializer"],
+            bias_initializer=hparams["bias_initializer"],
             optimizer_hparams=hparams.get("optimizer_hparams", {}),
             loss_params=hparams.get("loss_params", {}),
             seed=hparams.get("seed", 42),
             logger_params=hparams.get("logger_params", {}),
             enable_progress_bar=hparams.get("enable_progress_bar", True),
             debug=hparams.get("debug", False),
-            check_val_every_n_epoch=hparams.get(
-                "check_val_every_n_epoch", 500),
-            update_mask_every_n_epoch=hparams.get(
-                "update_mask_every_n_epoch", 500)
+            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
+            update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500),
+            coefficent_threshold=hparams.get("coefficent_threshold", 0.1),
         )
 
         # Load the model and optimizer state from the checkpoint
         trainer.load_model(checkpoint)
 
         return trainer
+
+
 
     def load_model(self, checkpoint: str):
         """

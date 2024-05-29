@@ -7,21 +7,25 @@ class Encoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'sigmoid'
+    activation: str = 'tanh'
     weight_initializer: str = 'xavier_uniform'
-    bias_initializer: str = 'constant'
+    bias_initializer: str = 'zeros'  
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)
         self.weight_initializer_fn = getattr(initializers, self.weight_initializer)()
-        self.bias_initializer_fn = getattr(initializers, self.bias_initializer)(0)
+        
+        if self.bias_initializer == 'zeros':
+            self.bias_initializer_fn = initializers.zeros #zeros has different syntax for some reason
+        else:
+            self.bias_initializer_fn = getattr(initializers, self.bias_initializer)()  
 
     @nn.compact
     def __call__(self, x: Array):
         for width in self.widths:
-            x = nn.Dense(width, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(x)
+            x = nn.Dense(width, kernel_init=self.weight_initializer_fn, bias_init=self.bias_initializer_fn)(x)
             x = self.activation_fn(x)
-        z = nn.Dense(self.latent_dim, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(x)
+        z = nn.Dense(self.latent_dim, kernel_init=self.weight_initializer_fn, bias_init=self.bias_initializer_fn)(x)
         return z
 
 
@@ -29,21 +33,25 @@ class Decoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'sigmoid'
+    activation: str = 'tanh'
     weight_initializer: str = 'xavier_uniform'
-    bias_initializer: str = 'constant'
+    bias_initializer: str = 'zeros'
 
     def setup(self):
         self.activation_fn = getattr(nn, self.activation)
         self.weight_initializer_fn = getattr(initializers, self.weight_initializer)()
-        self.bias_initializer_fn = getattr(initializers, self.bias_initializer)(0)
+
+        if self.bias_initializer == 'zeros':
+            self.bias_initializer_fn = initializers.zeros
+        else:
+            self.bias_initializer_fn = getattr(initializers, self.bias_initializer)() 
 
     @nn.compact
-    def __call__(self, z):
+    def __call__(self, z: Array):
         for width in reversed(self.widths):
-            z = nn.Dense(width, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(z)
+            z = nn.Dense(width, kernel_init=self.weight_initializer_fn, bias_init=self.bias_initializer_fn)(z)
             z = self.activation_fn(z)
-        x_decode = nn.Dense(self.input_dim, kernel_init=self.weight_initializer_fn, bias_init = self.bias_initializer_fn)(z)
+        x_decode = nn.Dense(self.input_dim, kernel_init=self.weight_initializer_fn, bias_init=self.bias_initializer_fn)(z)
         return x_decode
 
 
@@ -64,7 +72,7 @@ class Autoencoder(nn.Module):
             (self.lib_size, self.latent_dim),
         )
 
-    def __call__(self, x):
+    def __call__(self, x: Array):
         z = self.encoder(x)
         x_hat = self.decoder(z)
         return z, x_hat
@@ -84,8 +92,7 @@ if __name__ == "__main__":
     x = jnp.ones((1, input_dim))
     encoder = Encoder(input_dim, latent_dim, widths)
     decoder = Decoder(input_dim, latent_dim, widths)
-    model = Autoencoder(input_dim, latent_dim, lib_size,
-                        widths, encoder, decoder)
+    model = Autoencoder(input_dim, latent_dim, lib_size, widths, encoder, decoder)
 
     # Split the key for consistent initialization
     key1, key2 = random.split(key)
