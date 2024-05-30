@@ -58,7 +58,7 @@ class SINDy_trainer:
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
         update_mask_every_n_epoch: int = 500,
-        coefficent_threshold: float = 0.1,
+        coefficient_threshold: float = 0.1, 
     ):
         """
         Trainer module for holding all parts required for training a model. 
@@ -82,7 +82,7 @@ class SINDy_trainer:
             debug (bool, optional): Whether to jit the loss functions. Defaults to False.
             check_val_every_n_epoch (int, optional): Check validation every n epoch. Defaults to 500.
             update_mask_every_n_epoch (int, optional): Update mask every n epoch. Defaults to 500.
-            coefficent_threshold (float, optional): Threshold for updating the mask. Defaults to 0.1.
+            coefficient_threshold (float, optional): Threshold for updating the mask. Defaults to 0.1.
         """
         self.seed = seed
 
@@ -122,9 +122,7 @@ class SINDy_trainer:
                 "optimizer_hparams": optimizer_hparams,
                 "loss_params": loss_params,
                 "update_mask_every_n_epoch": update_mask_every_n_epoch,
-                "coefficent_threshold": coefficent_threshold,
-                "update_mask_every_n_epoch": update_mask_every_n_epoch,
-                "coefficent_threshold": coefficent_threshold,
+                "coefficient_threshold": coefficient_threshold,
         }
 
         ### Define the autoencoder model
@@ -136,6 +134,7 @@ class SINDy_trainer:
         self.loss_fn = loss_factory(autoencoder=self.model, **self.loss_params)
         
         self.create_jitted_functions()
+
     
     def _init_autoencoder(self):
         """
@@ -260,11 +259,13 @@ class SINDy_trainer:
             opt_class(lr_schedule, **hparams)
         )
         # Initialize training state
-        self.state = TrainState.create(apply_fn=self.state.apply_fn,
-                                       params=self.state.params,
-                                       batch_stats=self.state.batch_stats,
-                                       tx=optimizer,
-                                       rng=self.state.rng)
+        self.state = TrainState.create(
+            apply_fn=self.state.apply_fn,
+            params=self.state.params,
+            tx=optimizer,
+            rng=self.state.rng,
+            mask=self.state.mask,
+        )
 
 
     def create_jitted_functions(self):
@@ -532,7 +533,7 @@ class SINDy_trainer:
             debug=hparams.get("debug", False),
             check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
             update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500),
-            coefficent_threshold=hparams.get("coefficent_threshold", 0.1),
+            coefficient_threshold=hparams.get("coefficient_threshold", 0.1),
         )
 
         # Load the model and optimizer state from the checkpoint

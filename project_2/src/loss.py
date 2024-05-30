@@ -47,7 +47,7 @@ def loss_dynamics_x_factory(decoder: nn.Module):
     def psi(params, z):
         return decoder.apply({"params": params}, z)
     
-    def dynamics_dx_residual(params: ModelParams, z: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array):
+    def dynamics_x_residual(params: ModelParams, z: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array):
         """
         Loss for the dynamics in x for a single data point
 
@@ -63,11 +63,13 @@ def loss_dynamics_x_factory(decoder: nn.Module):
         Returns:
             Array -- Loss dynamics in x
         """
+        #jacobian_fn of decoder with respect to z
         dpsi_dz = jacfwd(psi, argnums=1)
-        dpsi_dt = dpsi_dz(params, z) @ (theta @ (mask * xi))
-        return (dx_dt - dpsi_dt) ** 2
+        #sindy dz prediction in x space
+        sindy_dz_in_x = dpsi_dz(params, z) @ (theta @ (mask * xi))
+        return (dx_dt - sindy_dz_in_x) ** 2
     
-    v_dynamics_dx_residual = vmap(dynamics_dx_residual, in_axes=(None, 0, 0, 0, None, None))
+    v_dynamics_x_residual = vmap(dynamics_x_residual, in_axes=(None, 0, 0, 0, None, None))
 
     def loss_dynamics_x(params: ModelParams, z: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array) -> Array:
         """
@@ -85,7 +87,7 @@ def loss_dynamics_x_factory(decoder: nn.Module):
         Returns:
             Array -- Loss dynamics in x
         """
-        return jnp.mean(v_dynamics_dx_residual(params, z, dx_dt, theta, xi, mask))
+        return jnp.mean(v_dynamics_x_residual(params, z, dx_dt, theta, xi, mask))
     
     return loss_dynamics_x
 
@@ -110,10 +112,12 @@ def loss_dynamics_z_factory(encoder: nn.Module):
         Returns:
             Array -- Loss dynamics in z
         """
+        #jacrev of encoder with respect to x
         dphi_dx = jacrev(phi, argnums=1)
+        #dx from data in z space 
         dx_in_z = dphi_dx(params, x) @ dx_dt
 
-        return (dx_in_z - theta @ (mask * xi)) ** 2
+        return (dx_in_z - theta @ (mask * xi)) ** 2 #dx_in_z - sindy prediction for dz
     
     v_dynamics_z_residual = vmap(dynamics_z_residual, in_axes=(None, 0, 0, 0, None, None))
 
@@ -143,7 +147,7 @@ def loss_regularization_factory() -> Callable:
     Returns:
         Callable -- Regularization loss function
     """
-    def loss_regularization(xi: Array) -> Array:
+    def loss_regularization(xi: Array, mask: Array) -> Array:
         """
         Regularization loss
 
@@ -153,16 +157,16 @@ def loss_regularization_factory() -> Callable:
         Returns:
             Array -- L1 norm of input
         """
-        return jnp.mean(jnp.abs(xi))
+        return jnp.mean(jnp.abs(xi*mask))
     
     return loss_regularization
 
 def loss_dynamics_x_second_order_factory(decoder: nn.Module, encoder: nn.Module):
 
-    def psi(z, decoderparams):
+    def psi(decoderparams, z):
         return decoder.apply({"params": decoderparams}, z)
     
-    def phi(x, encoderparams):
+    def phi(encoderparams, x):
         return encoder.apply({"params": encoderparams}, x)
 
     def loss_dynamics_x_second_order_residual(decoder_params: ModelParams, encoder_params: ModelParams, z: Array, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
@@ -170,8 +174,8 @@ def loss_dynamics_x_second_order_factory(decoder: nn.Module, encoder: nn.Module)
         Second-order loss for the dynamics in x for a single data point
 
         Arguments:
-            params {ModelParams} -- Model parameters
-            decoder {nn.Module} -- Decoder
+            decoder_params {ModelParams} -- Decoder parameters
+            encoder_params {ModelParams} -- Encoder parameters
             z {Array} -- Latent space
             x {Array} -- Original data
             dx {Array} -- First derivative of x
@@ -183,17 +187,29 @@ def loss_dynamics_x_second_order_factory(decoder: nn.Module, encoder: nn.Module)
         Returns:
             Array -- Second-order loss dynamics in x
         """
+        # Compute the Jacobian of the encoder with respect to x
         dphi_dx = jacrev(phi, argnums=1)
-        dx_in_z = dphi_dx(x, encoder_params) @ dx
+        dphi_dx_val = dphi_dx(encoder_params, x)
 
-        dpsi_dz = jacfwd(psi)
-        ddpsi_dz2 = jacfwd(dpsi_dz)
-        
-        ddz_in_x = (ddpsi_dz2(z, decoder_params) @ dx_in_z) @ dx_in_z + dpsi_dz(z, decoder_params) @ (theta @ (mask * xi)) # chain rule (theta @ (mask * xi) is the SINDy reconstruction of ddz
+        # Transform dx from x-space to z-space
+        dx_in_z = dphi_dx_val @ dx
+
+        # Compute the Jacobian and Hessian of the decoder with respect to z
+        dpsi_dz = jacfwd(psi, argnums=1)
+        dpsi_dz_val = dpsi_dz(decoder_params, z)
+
+        dpsi_dz2 = jacfwd(dpsi_dz, argnums=1)
+        dpsi_dz2_val = dpsi_dz2(decoder_params, z)
+
+        # SINDy reconstruction of ddz
+        ddz_reconstructed = theta @ (mask * xi)
+
+        # Apply the chain rule for the second-order derivative
+        ddz_in_x = (dpsi_dz2_val @ dx_in_z) @ dx_in_z + dpsi_dz_val @ ddz_reconstructed
 
         return (ddz_in_x - ddx) ** 2
 
-    v_loss_dynamics_x_second_order_single = vmap(loss_dynamics_x_second_order_residual, in_axes=(None, None, 0, 0, 0, 0, 0, None, None))
+    v_loss_dynamics_x_second_order_residual = vmap(loss_dynamics_x_second_order_residual, in_axes=(None, None, 0, 0, 0, 0, 0, None, None))
 
     def loss_dynamics_x_second_order(decoder_params: ModelParams, encoder_params:ModelParams, z: Array, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
         """
@@ -212,16 +228,16 @@ def loss_dynamics_x_second_order_factory(decoder: nn.Module, encoder: nn.Module)
         Returns:
             Array -- Second-order loss dynamics in x
         """
-        return jnp.mean(v_loss_dynamics_x_second_order_single(decoder_params, encoder_params, z, x, dx, ddx, theta, xi, mask))
+        return jnp.mean(v_loss_dynamics_x_second_order_residual(decoder_params, encoder_params, z, x, dx, ddx, theta, xi, mask))
     
     return loss_dynamics_x_second_order
 
 def loss_dynamics_z_second_order_factory(encoder: nn.Module):
      
-    def phi(x, params):
+    def phi(params, x):
         return encoder.apply({"params": params}, x)
 
-    def loss_dynamics_z_second_order_single(params: ModelParams, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
+    def loss_dynamics_z_second_order_residual(params: ModelParams, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
         """
         Second-order loss for the dynamics in z for a single data point
 
@@ -237,15 +253,17 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
 
         Returns:
             Array -- Second-order loss dynamics in z
-        """     
+        """
+        # Jacobian of encoder with respect to x     
         dphi_dx = jacrev(phi, argnums=1)
-        ddphi_dx2 = jacrev(dphi_dx, argnums=1) # second derivative/hessian
+        # Hessian of encoder with respect to x
+        ddphi_dx2 = jacrev(dphi_dx, argnums=1) 
 
-        ddx_in_z = (ddphi_dx2(x, params) @ dx) @ dx + dphi_dx(x, params) @ ddx # chain rule
+        ddx_in_z = (ddphi_dx2(params, x) @ dx) @ dx + dphi_dx(params, x) @ ddx # chain rule
 
         return (ddx_in_z - theta @ (mask * xi)) ** 2
 
-    v_loss_dynamics_z_second_order_single = vmap(loss_dynamics_z_second_order_single, in_axes=(None, 0, 0, 0, 0, None, None))
+    v_loss_dynamics_z_second_order_residual = vmap(loss_dynamics_z_second_order_residual, in_axes=(None, 0, 0, 0, 0, None, None))
 
     def loss_dynamics_z_second_order(params: ModelParams, x: Array, dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array) -> Array:
         """
@@ -263,9 +281,10 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
         Returns:
             Array -- Second-order loss dynamics in z
         """
-        return jnp.mean(v_loss_dynamics_z_second_order_single(params, x, dx, ddx, theta, xi, mask))
+        return jnp.mean(v_loss_dynamics_z_second_order_residual(params, x, dx, ddx, theta, xi, mask))
     
     return loss_dynamics_z_second_order
+
 
 def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, include_sine: bool = False, weights: tuple = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False):
     """
@@ -283,7 +302,7 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         Callable: Loss function
     """
     sindy_library = create_sindy_library(poly_order, include_sine, n_states=latent_dim)
-    recon_weight, dx_weight, dz_weight, reg_weight = weights
+    recon_weight, x_weight, z_weight, reg_weight = weights
 
     # Unpacking autoencoder
     encoder = autoencoder.encoder
@@ -294,11 +313,11 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
     loss_regularization = loss_regularization_factory()
 
     if second_order:
-        loss_dynamics_dx = loss_dynamics_x_second_order_factory(decoder, encoder)
-        loss_dynamics_dz = loss_dynamics_z_second_order_factory(encoder)
+        loss_dynamics_x = loss_dynamics_x_second_order_factory(decoder, encoder)
+        loss_dynamics_z = loss_dynamics_z_second_order_factory(encoder)
     else:
-        loss_dynamics_dx = loss_dynamics_x_factory(decoder)
-        loss_dynamics_dz = loss_dynamics_z_factory(encoder)
+        loss_dynamics_x = loss_dynamics_x_factory(decoder)
+        loss_dynamics_z = loss_dynamics_z_factory(encoder)
 
     def base_loss_fn_first_order(params: ModelLayers, batch: Tuple, mask: Array):
         """
@@ -324,16 +343,16 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
 
         # Compute losses across the entire batch
         recon_loss = recon_weight * loss_reconstruction(x, x_hat)
-        dx_loss = dx_weight * loss_dynamics_dx(decoder_params, z, dx, theta, xi, mask)
-        dz_loss = dz_weight * loss_dynamics_dz(encoder_params, x, dx, theta, xi, mask)
+        x_dynamics_loss = x_weight * loss_dynamics_x(decoder_params, z, dx, theta, xi, mask)
+        z_dynamics_loss = z_weight * loss_dynamics_z(encoder_params, x, dx, theta, xi, mask)
         
-        total_loss = recon_loss + dx_loss + dz_loss
+        total_loss = recon_loss + x_dynamics_loss + z_dynamics_loss
 
         loss_dict = {
             "loss": total_loss,
             "reconstruction": recon_loss,
-            "dynamics_dx": dx_loss,
-            "dynamics_dz": dz_loss,
+            "dynamics_x": x_dynamics_loss,
+            "dynamics_z": z_dynamics_loss,
         }
         
         return total_loss, loss_dict
@@ -362,16 +381,16 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
 
         # Compute losses across the entire batch
         recon_loss = recon_weight * loss_reconstruction(x, x_hat)
-        dx_loss = dx_weight * loss_dynamics_dx(decoder_params, encoder_params, z, x, dx, ddx, theta, xi, mask)
-        dz_loss = dz_weight * loss_dynamics_dz(encoder_params, x, dx, ddx, theta, xi, mask)
+        x_dynamics_loss = x_weight * loss_dynamics_x(decoder_params, encoder_params, z, x, dx, ddx, theta, xi, mask)
+        z_dynamics_loss = z_weight * loss_dynamics_z(encoder_params, x, dx, ddx, theta, xi, mask)
         
-        total_loss = recon_loss + dx_loss + dz_loss
+        total_loss = recon_loss + x_dynamics_loss + z_dynamics_loss
 
         loss_dict = {
             "loss": total_loss,
             "reconstruction": recon_loss,
-            "dynamics_dx": dx_loss,
-            "dynamics_dz": dz_loss,
+            "dynamics_x": x_dynamics_loss,
+            "dynamics_z": z_dynamics_loss,
         }
         
         return total_loss, loss_dict
@@ -380,7 +399,7 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         def loss_fn_with_reg_first_order(params: ModelLayers, batch: Tuple, mask: Array):
             total_loss, loss_dict = base_loss_fn_first_order(params, batch, mask)
             xi = params["sindy_coefficients"]
-            loss_reg = reg_weight * loss_regularization(xi)
+            loss_reg = reg_weight * loss_regularization(xi, mask)
             total_loss += loss_reg
             loss_dict["loss"] = total_loss
             loss_dict["regularization"] = loss_reg
@@ -389,7 +408,7 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         def loss_fn_with_reg_second_order(params: ModelLayers, batch: Tuple, mask: Array):
             total_loss, loss_dict = base_loss_fn_second_order(params, batch, mask)
             xi = params["sindy_coefficients"]
-            loss_reg = reg_weight * loss_regularization(xi)
+            loss_reg = reg_weight * loss_regularization(xi, mask)
             total_loss += loss_reg
             loss_dict["loss"] = total_loss
             loss_dict["regularization"] = loss_reg

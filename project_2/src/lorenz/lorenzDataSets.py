@@ -1,6 +1,6 @@
 import sys
 sys.path.append("../")
-from data_utils import JaxDocsLoader
+from data_utils import JaxDocsLoader, get_random_sample
 from lorenz.lorenzData import get_lorenz_train_data, get_lorenz_test_data
 from torch.utils.data import Dataset
 
@@ -42,16 +42,21 @@ class LorenzTestDataset(Dataset):
     def __getitem__(self, idx):
         return self.x[idx], self.dx[idx], self.z[idx], self.dz[idx]
 
-
+def validate_data(data):
+    for key, value in data.items():
+        print(f"{key}: shape = {value.shape}")
 
 if __name__ == "__main__":
-    from data_utils import get_random_sample
     # Generate training data
     train_data = get_lorenz_train_data(2)
+    print("Train data:")
+    validate_data(train_data)
     train_dataset = LorenzTrainDataset(train_data)
 
     # Generate test data
     test_data = get_lorenz_test_data(2)
+    print("Test data:")
+    validate_data(test_data)
     test_dataset = LorenzTestDataset(test_data)
 
     # Create data loaders
@@ -63,13 +68,19 @@ if __name__ == "__main__":
     print("Train batch shapes:", x.shape, dx.shape)
 
     # See what one batch from the test data loader looks like
-    x, dx, z, dz = next(iter(test_loader))
-    print("Test batch shapes:", x.shape, dx.shape, z.shape, dz.shape)
+    try:
+        x, dx, z, dz = next(iter(test_loader))
+        print("Test batch shapes:", x.shape, dx.shape, z.shape, dz.shape)
+    except IndexError as e:
+        print(f"Error while getting test batch: {e}")
 
     # Get a random sample from the training data loader
     random_x, random_dx = get_random_sample(train_loader)
     print("Random train sample shapes:", random_x.shape, random_dx.shape)
 
     # Get a random sample from the test data loader
-    random_x, random_dx, random_z, random_dz = get_random_sample(test_loader)
-    print("Random test sample shapes:", random_x.shape, random_dx.shape, random_z.shape, random_dz.shape)
+    try:
+        random_x, random_dx, random_z, random_dz = get_random_sample(test_loader)
+        print("Random test sample shapes:", random_x.shape, random_dx.shape, random_z.shape, random_dz.shape)
+    except IndexError as e:
+        print(f"Error while getting random test sample: {e}")

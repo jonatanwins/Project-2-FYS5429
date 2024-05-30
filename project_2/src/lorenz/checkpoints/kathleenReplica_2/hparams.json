@@ -6,7 +6,7 @@
         64,
         32
     ],
-    "activation": "tanh",
+    "activation": "sigmoid",
     "weight_initializer": "xavier_uniform",
     "bias_initializer": "zeros",
     "optimizer_hparams": {
