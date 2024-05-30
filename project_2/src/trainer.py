@@ -218,19 +218,21 @@ class SINDy_trainer:
         print(self.model.tabulate(random.PRNGKey(0), exmp_input))
 
     def init_optimizer(self,
-                       num_epochs : int,
-                       num_steps_per_epoch : int):
+                   num_epochs: int,
+                   num_steps_per_epoch: int):
         """
         Initializes the optimizer and learning rate scheduler.
+        Defaults to no warmup and a constant learning rate with Adam.
+        No weight decay or gradient clipping by default.
 
         Args:
-          num_epochs: Number of epochs the model will be trained for.
-          num_steps_per_epoch: Number of training steps per epoch.
+        num_epochs: Number of epochs the model will be trained for.
+        num_steps_per_epoch: Number of training steps per epoch.
         """
         hparams = copy(self.optimizer_hparams)
 
         # Initialize optimizer
-        optimizer_name = hparams.pop('optimizer', 'adamw')
+        optimizer_name = hparams.pop('optimizer', 'adam')
         if optimizer_name.lower() == 'adam':
             opt_class = optax.adam
         elif optimizer_name.lower() == 'adamw':
@@ -238,26 +240,34 @@ class SINDy_trainer:
         elif optimizer_name.lower() == 'sgd':
             opt_class = optax.sgd
         else:
-            assert False, f'Unknown optimizer "{opt_class}"'
-        # Initialize learning rate scheduler
-        # A cosine decay scheduler is used, but others are also possible
+            assert False, f'Unknown optimizer "{optimizer_name}"'
+
+        # Initialize learning rate
         lr = hparams.pop('lr', 1e-3)
-        warmup = hparams.pop('warmup', 0)
-        lr_schedule = optax.warmup_cosine_decay_schedule(
-            init_value=0.0,
-            peak_value=lr,
-            warmup_steps=warmup,
-            decay_steps=int(num_epochs * num_steps_per_epoch),
-            end_value=0.01 * lr
-        )
-        # Clip gradients at max value, and evt. apply weight decay
+        use_lr_schedule = hparams.pop('lr_schedule', False)
+
+        if use_lr_schedule:
+            # Initialize learning rate scheduler
+            warmup = hparams.pop('warmup', 0)
+            lr = optax.warmup_cosine_decay_schedule(
+                init_value=0.0,
+                peak_value=lr,
+                warmup_steps=warmup,
+                decay_steps=int(num_epochs * num_steps_per_epoch),
+                end_value=0.01 * lr
+            )
+
+        # Clip gradients at max value, and optionally apply weight decay
         transf = [optax.clip_by_global_norm(hparams.pop('gradient_clip', 1.0))]
-        if opt_class == optax.sgd and 'weight_decay' in hparams:  # wd is integrated in adamw
+        if opt_class == optax.sgd and 'weight_decay' in hparams:  # Weight decay is integrated in adamw
             transf.append(optax.add_decayed_weights(hparams.pop('weight_decay', 0.0)))
+
+        # Combine transformations and optimizer
         optimizer = optax.chain(
             *transf,
-            opt_class(lr_schedule, **hparams)
+            opt_class(lr, **hparams)
         )
+
         # Initialize training state
         self.state = TrainState.create(
             apply_fn=self.state.apply_fn,
