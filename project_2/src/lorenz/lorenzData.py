@@ -208,6 +208,8 @@ def get_lorenz_test_data(n_ics, noise_strength=0):
         (-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
     data["dx"] = data["dx"].reshape(
         (-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
+    data["z"] = data["z"].reshape((-1, 3))
+    data["dz"] = data["dz"].reshape((-1, 3))
 
     return data
 
