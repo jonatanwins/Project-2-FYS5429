@@ -1,7 +1,7 @@
 jupyter
 jupyterlab
 jax
-jaxlib
+jaxlib==0.4.14+cuda112 -f https://storage.googleapis.com/jax-releases/jax_releases.html
 flax
 numpy
 scipy
@@ -10,6 +10,7 @@ pytorch-lightning
 tensorboardx
 tensorflow
 matplotlib
+optax
 tqdm
 pandas
 pillow
