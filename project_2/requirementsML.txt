@@ -9,7 +9,6 @@ pytorch-lightning
 tensorboardx
 tensorflow
 matplotlib
-optax
 tqdm
 pandas
 pillow
