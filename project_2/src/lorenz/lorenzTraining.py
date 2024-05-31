@@ -30,7 +30,6 @@
 # %%
 import numpy as np
 import matplotlib.pyplot as plt
-%matplotlib inline
 from scipy.special import legendre
 
 plt.style.use("../plot_utils/plot_settings.mplstyle")
