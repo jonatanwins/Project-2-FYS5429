@@ -1,7 +1,6 @@
 jupyter
 jupyterlab
 jax
-jaxlib==0.4.14+cuda112 -f https://storage.googleapis.com/jax-releases/jax_releases.html
 flax
 numpy
 scipy
