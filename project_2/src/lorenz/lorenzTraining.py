@@ -12,6 +12,9 @@ from lorenzData import get_lorenz_test_data, get_lorenz_train_data, LorenzDatase
 from data_utils import get_random_sample, JaxDocsLoader
 
 
+seed = int(sys.argv[1])
+print(f"Seed: {seed}")
+
 print(f"JAX is using: {xla_bridge.get_backend().platform}")
 devices = jax.devices()
 print(f"Number of devices: {len(devices)}")
@@ -52,6 +55,9 @@ latent_dim = 3
 poly_order = 3
 widths = [64, 32]
 
+initial_epochs = 10001
+final_epochs = 1001
+
 # Get example input from training_data loader
 x, dx = get_random_sample(training_data_loader)
 
@@ -71,7 +77,7 @@ hparams = {
         'include_sine': False,
         'weights': (1, 1e-4, 0, 1e-5)
     },
-    'seed': 42,
+    'seed': seed,
     'update_mask_every_n_epoch': 500,
     'coefficient_threshold': 0.1
 }
@@ -91,4 +97,4 @@ params = {**hparams, **trainer_params}
 # Initialize trainer
 trainer = SINDy_trainer(**params)
 
-trainer.train_model(training_data_loader, validation_data_loader, num_epochs=10001, final_epochs=1001)
+trainer.train_model(training_data_loader, validation_data_loader, num_epochs=initial_epochs, final_epochs=final_epochs)
