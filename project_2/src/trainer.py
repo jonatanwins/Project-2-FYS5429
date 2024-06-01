@@ -520,7 +520,7 @@ class SINDy_trainer:
         """
         checkpoint = os.path.abspath(checkpoint)
         hparams_file = os.path.join(checkpoint, "hparams.json")
-        assert os.path.isfile(hparams_file), "Could not find hparams file"
+        assert os.path.isfile(hparams_file), f"Could not find hparams file"
 
         with open(hparams_file, "r") as f:
             hparams = json.load(f)
