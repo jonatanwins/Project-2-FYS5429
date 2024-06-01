@@ -58,7 +58,7 @@ class SINDy_trainer:
         debug: bool = False,
         check_val_every_n_epoch: int = 500,
         update_mask_every_n_epoch: int = 500,
-        coefficent_threshold: float = 0.1,
+        coefficient_threshold: float = 0.1, 
     ):
         """
         Trainer module for holding all parts required for training a model. 
@@ -82,7 +82,7 @@ class SINDy_trainer:
             debug (bool, optional): Whether to jit the loss functions. Defaults to False.
             check_val_every_n_epoch (int, optional): Check validation every n epoch. Defaults to 500.
             update_mask_every_n_epoch (int, optional): Update mask every n epoch. Defaults to 500.
-            coefficent_threshold (float, optional): Threshold for updating the mask. Defaults to 0.1.
+            coefficient_threshold (float, optional): Threshold for updating the mask. Defaults to 0.1.
         """
         self.seed = seed
 
@@ -122,9 +122,7 @@ class SINDy_trainer:
                 "optimizer_hparams": optimizer_hparams,
                 "loss_params": loss_params,
                 "update_mask_every_n_epoch": update_mask_every_n_epoch,
-                "coefficent_threshold": coefficent_threshold,
-                "update_mask_every_n_epoch": update_mask_every_n_epoch,
-                "coefficent_threshold": coefficent_threshold,
+                "coefficient_threshold": coefficient_threshold,
         }
 
         ### Define the autoencoder model
@@ -136,6 +134,7 @@ class SINDy_trainer:
         self.loss_fn = loss_factory(autoencoder=self.model, **self.loss_params)
         
         self.create_jitted_functions()
+
     
     def _init_autoencoder(self):
         """
@@ -219,19 +218,21 @@ class SINDy_trainer:
         print(self.model.tabulate(random.PRNGKey(0), exmp_input))
 
     def init_optimizer(self,
-                       num_epochs : int,
-                       num_steps_per_epoch : int):
+                   num_epochs: int,
+                   num_steps_per_epoch: int):
         """
         Initializes the optimizer and learning rate scheduler.
+        Defaults to no warmup and a constant learning rate with Adam.
+        No weight decay or gradient clipping by default.
 
         Args:
-          num_epochs: Number of epochs the model will be trained for.
-          num_steps_per_epoch: Number of training steps per epoch.
+        num_epochs: Number of epochs the model will be trained for.
+        num_steps_per_epoch: Number of training steps per epoch.
         """
         hparams = copy(self.optimizer_hparams)
 
         # Initialize optimizer
-        optimizer_name = hparams.pop('optimizer', 'adamw')
+        optimizer_name = hparams.pop('optimizer', 'adam')
         if optimizer_name.lower() == 'adam':
             opt_class = optax.adam
         elif optimizer_name.lower() == 'adamw':
@@ -239,32 +240,42 @@ class SINDy_trainer:
         elif optimizer_name.lower() == 'sgd':
             opt_class = optax.sgd
         else:
-            assert False, f'Unknown optimizer "{opt_class}"'
-        # Initialize learning rate scheduler
-        # A cosine decay scheduler is used, but others are also possible
+            assert False, f'Unknown optimizer "{optimizer_name}"'
+
+        # Initialize learning rate
         lr = hparams.pop('lr', 1e-3)
-        warmup = hparams.pop('warmup', 0)
-        lr_schedule = optax.warmup_cosine_decay_schedule(
-            init_value=0.0,
-            peak_value=lr,
-            warmup_steps=warmup,
-            decay_steps=int(num_epochs * num_steps_per_epoch),
-            end_value=0.01 * lr
-        )
-        # Clip gradients at max value, and evt. apply weight decay
+        use_lr_schedule = hparams.pop('lr_schedule', False)
+
+        if use_lr_schedule:
+            # Initialize learning rate scheduler
+            warmup = hparams.pop('warmup', 0)
+            lr = optax.warmup_cosine_decay_schedule(
+                init_value=0.0,
+                peak_value=lr,
+                warmup_steps=warmup,
+                decay_steps=int(num_epochs * num_steps_per_epoch),
+                end_value=0.01 * lr
+            )
+
+        # Clip gradients at max value, and optionally apply weight decay
         transf = [optax.clip_by_global_norm(hparams.pop('gradient_clip', 1.0))]
-        if opt_class == optax.sgd and 'weight_decay' in hparams:  # wd is integrated in adamw
+        if opt_class == optax.sgd and 'weight_decay' in hparams:  # Weight decay is integrated in adamw
             transf.append(optax.add_decayed_weights(hparams.pop('weight_decay', 0.0)))
+
+        # Combine transformations and optimizer
         optimizer = optax.chain(
             *transf,
-            opt_class(lr_schedule, **hparams)
+            opt_class(lr, **hparams)
         )
+
         # Initialize training state
-        self.state = TrainState.create(apply_fn=self.state.apply_fn,
-                                       params=self.state.params,
-                                       batch_stats=self.state.batch_stats,
-                                       tx=optimizer,
-                                       rng=self.state.rng)
+        self.state = TrainState.create(
+            apply_fn=self.state.apply_fn,
+            params=self.state.params,
+            tx=optimizer,
+            rng=self.state.rng,
+            mask=self.state.mask,
+        )
 
 
     def create_jitted_functions(self):
@@ -532,7 +543,7 @@ class SINDy_trainer:
             debug=hparams.get("debug", False),
             check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
             update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500),
-            coefficent_threshold=hparams.get("coefficent_threshold", 0.1),
+            coefficient_threshold=hparams.get("coefficient_threshold", 0.1),
         )
 
         # Load the model and optimizer state from the checkpoint
