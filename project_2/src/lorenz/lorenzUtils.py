@@ -27,11 +27,11 @@ def coordinate_transformation(xi, test_data):
     return z0_transformed, sindy_coefficients_transformed
 
 def simulate_ode(test_data, t, xi, xi_transformed=None, params=None):
-    z_sim = sindy_simulate(test_data['z'][0], t, xi, params['poly_order'], params['include_sine'])
+    z_sim = sindy_simulate(test_data['z'][0], t, xi, params['poly_order'], params['loss_params']['include_sine'])
 
     if xi_transformed is not None:
         z0_transformed, sindy_coefficients_transformed = coordinate_transformation(xi_transformed, test_data)
-        z_sim_transformed = sindy_simulate(z0_transformed, t, sindy_coefficients_transformed, params['poly_order'], params['include_sine'])
+        z_sim_transformed = sindy_simulate(z0_transformed, t, sindy_coefficients_transformed, params['poly_order'], params['loss_params']['include_sine'])
         return z_sim, z_sim_transformed
 
     return z_sim
@@ -120,7 +120,7 @@ def calculate_losses(trainer, test_data, params):
         trainer.state.params, 
         test_data["z"], 
         test_data["dx"], 
-        create_sindy_library(params["poly_order"], params["include_sine"], n_states=params["latent_dim"])(test_data["z"]),
+        create_sindy_library(params["poly_order"], params["loss_params"]["include_sine"], n_states=params["latent_dim"])(test_data["z"]),
         trainer.state.params["sindy_coefficients"], 
         trainer.state.mask
     )
@@ -128,7 +128,7 @@ def calculate_losses(trainer, test_data, params):
         trainer.state.params, 
         test_data["x"], 
         test_data["dx"], 
-        create_sindy_library(params["poly_order"], params["include_sine"], n_states=params["latent_dim"])(test_data["z"]),
+        create_sindy_library(params["poly_order"], params["loss_params"]["include_sine"], n_states=params["latent_dim"])(test_data["z"]),
         trainer.state.params["sindy_coefficients"], 
         trainer.state.mask
     )
@@ -138,34 +138,38 @@ def calculate_losses(trainer, test_data, params):
     print("SINDy relative error, z: %f" % sindy_dz_error)
 
     return decoder_x_error, decoder_dx_error, sindy_dz_error
-
-# Example usage:
 if __name__ == "__main__":
     from trainer import SINDy_trainer
     import json
 
-    def get_checkpoint_path():
-        try:
-            shell = get_ipython().__class__.__name__
-            if shell == "ZMQInteractiveShell":
-                return "checkpoints/version_0"
-            else:
-                return "src/lorenz/checkpoints/version_0"
-        except NameError:
-            return "src/lorenz/checkpoints/version_0"
-
-    checkpoint_path = get_checkpoint_path()
+    # Load the trained model
+    checkpoint_path = "checkpoints/kathleenReplica_1"
     exmp_input = jnp.arange(128).reshape(1, 128)
     trainer = SINDy_trainer.load_from_checkpoint(checkpoint_path, exmp_input)
 
-    with open(checkpoint_path + "/hparams.json", "r") as f:
-        params = json.load(f)
+    # Load hyperparameters
+    with open(f"{checkpoint_path}/hparams.json", "r") as f:
+        hparams = json.load(f)
 
+    # Get sindy coefficients and mask from the trained model
     sindy_coefficients = trainer.state.params["sindy_coefficients"]
     mask = trainer.state.mask
 
-    t = np.arange(0, 20, 0.01)
-    z0 = np.array([[-8, 7, 27]])
-    test_data = generate_lorenz_data(z0, t, params["input_dim"], linear=False, normalization=np.array([1/40, 1/40, 1/40]))
-    test_data['x'] = test_data['x'].reshape((-1, params['input_dim']))
-    test_data['dx']
+    # Generate minimal test data
+    t = np.arange(0, 1, 0.01)  # minimal time span
+    z0 = np.array([[-8, 7, 27]])  # single initial condition
+    test_data = generate_lorenz_data(z0, t, hparams["input_dim"], linear=False, normalization=np.array([1/40, 1/40, 1/40]))
+    test_data['x'] = test_data['x'].reshape((-1, hparams['input_dim']))
+    test_data['dx'] = test_data['dx'].reshape((-1, hparams['input_dim']))
+
+    # Simulate ODE with the discovered coefficients
+    z_sim = simulate_ode(test_data, t, sindy_coefficients, params=hparams)
+
+    # Plot sindy coefficients
+    plot_sindy_coefficients(sindy_coefficients)
+
+    # Plot the single trajectory
+    plot_single_trajectory(t, z_sim, test_data=test_data)
+
+    # Calculate losses
+    calculate_losses(trainer, test_data, hparams)

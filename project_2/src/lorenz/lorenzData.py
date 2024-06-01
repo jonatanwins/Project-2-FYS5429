@@ -12,6 +12,7 @@ from sindy_utils import library_size
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.special import legendre
+from torch.utils.data import Dataset
 
 def lorenz(t, z, sigma=10, beta=8/3, rho=28):
     x, y, z = z
@@ -231,6 +232,27 @@ def lorenz_coefficients(normalization, poly_order=3, sigma=10.0, beta=8 / 3, rho
     Xi[3, 2] = -beta
     Xi[5, 2] = normalization[2] / (normalization[0] * normalization[1])
     return Xi
+
+
+from torch.utils.data import Dataset
+
+class LorenzDataset(Dataset):
+    """
+    PyTorch dataset for the Lorenz dataset.
+
+    Arguments:
+        data - Dictionary containing the Lorenz dataset.
+    """
+
+    def __init__(self, data):
+        self.x = data["x"]
+        self.dx = data["dx"]
+
+    def __len__(self):
+        return self.x.shape[0]
+
+    def __getitem__(self, idx):
+        return self.x[idx], self.dx[idx]
 
 if __name__ == "__main__":
     # Test the get_lorenz_train_data function

@@ -82,3 +82,35 @@ def wrap_to_pi(z):
     z_mod = z % (2*np.pi)
     subtract_m = (z_mod > np.pi) * (-2*np.pi)
     return z_mod + subtract_m
+
+
+if __name__ == "__main__":
+    # Number of initial conditions
+    n_ics = 5
+
+    # Generate pendulum data
+    data = get_pendulum_data(n_ics)
+    training_data = get_pendulum_training_data(n_ics)
+
+    # Print shapes of the generated data to verify correctness
+    print("Shapes of generated pendulum data:")
+    print(f"t shape: {data['t'].shape}")
+    print(f"x shape: {data['x'].shape}")
+    print(f"dx shape: {data['dx'].shape}")
+    print(f"ddx shape: {data['ddx'].shape}")
+    print(f"z shape: {data['z'].shape}")
+    print(f"dz shape: {data['dz'].shape}")
+
+    print("\nShapes of generated pendulum training data:")
+    print(f"x shape: {training_data['x'].shape}")
+    print(f"dx shape: {training_data['dx'].shape}")
+    print(f"ddx shape: {training_data['ddx'].shape}")
+
+    # Optionally, print some of the actual data to inspect values
+    print("\nSample of generated pendulum data:")
+    print(f"t: {data['t'][:5]}")  # Print first 5 time steps
+    print(f"x: {data['x'][:5]}")  # Print first 5 x values
+    print(f"dx: {data['dx'][:5]}")  # Print first 5 dx values
+    print(f"ddx: {data['ddx'][:5]}")  # Print first 5 ddx values
+    print(f"z: {data['z'][:5]}")  # Print first 5 z values
+    print(f"dz: {data['dz'][:5]}")  # Print first 5 dz values
