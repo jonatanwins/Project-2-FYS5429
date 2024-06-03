@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import jacobian, vmap, jacfwd, jacrev
-from sindy_utils import create_sindy_library
+from sindyLibrary import sindy_library_factory
 from typing import Tuple, Callable
 from jax import Array
 from type_utils import ModelLayers, ModelParams
@@ -286,22 +286,23 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
     return loss_dynamics_z_second_order
 
 
-def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, include_sine: bool = False, weights: tuple = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False):
+def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, include_sine: bool = False, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False) -> Callable:
     """
-    Create a loss function for different SINDy libraries
+    Create a loss function for different SINDy libraries.
 
     Args:
-        latent_dim (int): dimension of latent space
-        poly_order (int): polynomial order
+        autoencoder (nn.Module): The autoencoder model.
+        latent_dim (int): Dimension of latent space.
+        poly_order (int): Polynomial order.
         include_sine (bool, optional): Include sine functions in the library. Defaults to False.
         weights (tuple, optional): Weights for the loss functions. Defaults to (1, 1, 40, 1).
         regularization (bool, optional): Whether to include regularization loss. Defaults to True.
         second_order (bool, optional): Whether to include second-order dynamics. Defaults to False.
 
     Returns:
-        Callable: Loss function
+        Callable: Loss function.
     """
-    sindy_library = create_sindy_library(poly_order, include_sine, n_states=latent_dim)
+    sindy_library = sindy_library_factory(poly_order, include_sine, n_states=latent_dim)
     recon_weight, x_weight, z_weight, reg_weight = weights
 
     # Unpacking autoencoder
@@ -319,19 +320,12 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         loss_dynamics_x = loss_dynamics_x_factory(decoder)
         loss_dynamics_z = loss_dynamics_z_factory(encoder)
 
-    def base_loss_fn_first_order(params: ModelLayers, batch: Tuple, mask: Array):
-        """
-        Base loss function for first-order dynamics
 
-        Args:
-            params (ModelLayers): Model parameters
-            batch (Tuple): Tuple of x and dx
-            mask (Array): Mask
-
-        Returns:
-            Tuple: Total loss and dictionary of losses
-        """
-        x, dx = batch
+    def loss_fn(params: ModelLayers, batch: Tuple, mask: Array) -> Tuple[float, dict]:
+        if second_order:
+            x, dx, ddx = batch
+        else:
+            x, dx = batch
 
         # Calculate z and x_hat
         z, x_hat = autoencoder.apply({"params": params}, x)
@@ -341,11 +335,17 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         encoder_params = params["encoder"]
         decoder_params = params["decoder"]
 
-        # Compute losses across the entire batch
+        # Compute reconstruction loss
         recon_loss = recon_weight * loss_reconstruction(x, x_hat)
-        x_dynamics_loss = x_weight * loss_dynamics_x(decoder_params, z, dx, theta, xi, mask)
-        z_dynamics_loss = z_weight * loss_dynamics_z(encoder_params, x, dx, theta, xi, mask)
         
+        # Compute dynamics losses
+        if second_order:
+            x_dynamics_loss = x_weight * loss_dynamics_x(decoder_params, encoder_params, z, x, dx, ddx, theta, xi, mask)
+            z_dynamics_loss = z_weight * loss_dynamics_z(encoder_params, x, dx, ddx, theta, xi, mask)
+        else:
+            x_dynamics_loss = x_weight * loss_dynamics_x(decoder_params, z, dx, theta, xi, mask)
+            z_dynamics_loss = z_weight * loss_dynamics_z(encoder_params, x, dx, theta, xi, mask)
+
         total_loss = recon_loss + x_dynamics_loss + z_dynamics_loss
 
         loss_dict = {
@@ -354,74 +354,20 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
             "dynamics_x": x_dynamics_loss,
             "dynamics_z": z_dynamics_loss,
         }
-        
-        return total_loss, loss_dict
 
-    def base_loss_fn_second_order(params: ModelLayers, batch: Tuple, mask: Array):
-        """
-        Base loss function for second-order dynamics
-
-        Args:
-            params (ModelLayers): Model parameters
-            batch (Tuple): Tuple of x, dx, and ddx
-            mask (Array): Mask
-
-        Returns:
-            Tuple: Total loss and dictionary of losses
-        """
-        x, dx, ddx = batch
-
-        # Calculate z and x_hat
-        z, x_hat = autoencoder.apply({"params": params}, x)
-        theta = sindy_library(z)
-        xi = params["sindy_coefficients"]
-
-        encoder_params = params["encoder"]
-        decoder_params = params["decoder"]
-
-        # Compute losses across the entire batch
-        recon_loss = recon_weight * loss_reconstruction(x, x_hat)
-        x_dynamics_loss = x_weight * loss_dynamics_x(decoder_params, encoder_params, z, x, dx, ddx, theta, xi, mask)
-        z_dynamics_loss = z_weight * loss_dynamics_z(encoder_params, x, dx, ddx, theta, xi, mask)
-        
-        total_loss = recon_loss + x_dynamics_loss + z_dynamics_loss
-
-        loss_dict = {
-            "loss": total_loss,
-            "reconstruction": recon_loss,
-            "dynamics_x": x_dynamics_loss,
-            "dynamics_z": z_dynamics_loss,
-        }
-        
-        return total_loss, loss_dict
-
-    if regularization:
-        def loss_fn_with_reg_first_order(params: ModelLayers, batch: Tuple, mask: Array):
-            total_loss, loss_dict = base_loss_fn_first_order(params, batch, mask)
-            xi = params["sindy_coefficients"]
+        if regularization:
             loss_reg = reg_weight * loss_regularization(xi, mask)
             total_loss += loss_reg
-            loss_dict["loss"] = total_loss
             loss_dict["regularization"] = loss_reg
-            return total_loss, loss_dict
 
-        def loss_fn_with_reg_second_order(params: ModelLayers, batch: Tuple, mask: Array):
-            total_loss, loss_dict = base_loss_fn_second_order(params, batch, mask)
-            xi = params["sindy_coefficients"]
-            loss_reg = reg_weight * loss_regularization(xi, mask)
-            total_loss += loss_reg
-            loss_dict["loss"] = total_loss
-            loss_dict["regularization"] = loss_reg
-            return total_loss, loss_dict
+        loss_dict["loss"] = total_loss
+        return total_loss, loss_dict
 
-        return loss_fn_with_reg_second_order if second_order else loss_fn_with_reg_first_order
-    else:
-        return base_loss_fn_second_order if second_order else base_loss_fn_first_order
-
+    return loss_fn
 if __name__ == "__main__":
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
-    from sindy_utils import library_size
+    from sindyLibrary import library_size
     from jax import random
     import optax
 

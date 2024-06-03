@@ -25,7 +25,7 @@ import jax.numpy as jnp
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from loss import loss_fn_factory
-from sindy_utils import library_size
+from sindyLibrary import library_size
 
 
 class TrainState(train_state.TrainState):
