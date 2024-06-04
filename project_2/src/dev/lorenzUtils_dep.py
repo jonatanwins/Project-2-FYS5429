@@ -4,7 +4,7 @@ Data-driven discovery of coordinates and governing equations (Champion et al. 20
 and is publicly available at https://github.com/kpchamp/SindyAutoencoders
 """
 
-from sindy_utils import library_size
+from sindyLibrary import library_size
 import numpy as np
 from scipy.integrate import odeint
 from scipy.special import legendre

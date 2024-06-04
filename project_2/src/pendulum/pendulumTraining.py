@@ -60,7 +60,7 @@ validation_data_loader = JaxDocsLoader(validation_data_set, batch_size=batch_siz
 
 # %%
 from jax import random
-from sindy_utils import library_size
+from sindyLibrary import library_size
 from trainer import SINDy_trainer
 
 # Set random key and hyperparameters

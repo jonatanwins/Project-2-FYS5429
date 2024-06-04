@@ -126,20 +126,56 @@ def add_intermediate_fractions(features: Array, library: Array) -> Array:
     Returns:
     Array: Updated SINDy library with intermediate fractions.
     """
-    def single_sample_intermediate_fractions(sample: Array):
-        n = len(sample)
-        fractions = []
-        for i in range(n):
-            for j in range(i + 1, n):
-                for k in range(n):
-                    if k != i and k != j:
-                        fractions.append((sample[i] - sample[j]) / sample[k])
-                        fractions.append((sample[j] - sample[i]) / sample[k])
-                        fractions.append(sample[i] * sample[j] / sample[k])
-        return jnp.array(fractions)
+    def devide(n, d):
+        return n / d
+    
+    num_features = features.shape[1]
 
+    def single_sample_intermediate_fractions(sample: Array):
+        sample_col = sample[:, jnp.newaxis]
+        sample_row = sample[jnp.newaxis, :]
+
+        differences_matrix = sample_col - sample_row
+
+        # Extract the upper triangle and the lower triangle separately, skipping the diagonal
+        upper_triangle = differences_matrix[jnp.triu_indices(num_features, k=1)]
+        lower_triangle = differences_matrix[jnp.tril_indices(num_features, k=-1)]
+
+        # Then, concatenate the upper and lower triangles to get the result without the diagonal
+        differences= jnp.concatenate([upper_triangle, lower_triangle]).flatten()
+       
+        #we need to tile differences num_features times
+        differences_tiled = jnp.tile(differences, num_features)
+        sample_repeat_1 = jnp.repeat(sample, num_features)
+        fractions_1 = vmap(devide)(differences_tiled, sample_repeat_1) 
+        fractions_2 = vmap(devide)(sample_repeat_1, differences_tiled)
+
+
+        product_matrix = sample_col * sample_row
+
+        # Get the indices for the upper triangle, excluding the diagonal
+        triu_indices = jnp.triu_indices(num_features, k=1)
+
+        # Use these indices to select the elements from the product matrix (avoiding duplicates and diagonal)
+        upper_tri_products = product_matrix[triu_indices]
+        upper_tri_products = upper_tri_products.flatten()
+
+        number_of_elm = num_features * (num_features - 1) // 2 #number of elements in upper triangle
+
+        #we need to repeat the upper_tri_products num_features times
+        upper_tri_products = jnp.tile(upper_tri_products, num_features)
+
+        #we need matchin size of sample for vmapping
+        sample_repeat_2 = jnp.repeat(sample, number_of_elm)
+        fractions_3 = vmap(devide)(upper_tri_products, sample_repeat_2)
+        fractions_4 = vmap(devide)(sample_repeat_2, upper_tri_products)
+
+        fractions = jnp.concatenate([fractions_1, fractions_2, fractions_3, fractions_4])
+        return fractions
+    
     intermediate_fractions = vmap(single_sample_intermediate_fractions)(features)
     return jnp.concatenate([library, intermediate_fractions], axis=1)
+
 
 def add_three_body_fractions(features: Array, library: Array) -> Array:
     """
@@ -171,17 +207,17 @@ def add_three_body_fractions(features: Array, library: Array) -> Array:
     three_body_fractions = vmap(single_sample_three_body_fractions)(features)
     return jnp.concatenate([library, three_body_fractions], axis=1)
 
-def sindy_library_factory(poly_order: int, include_sine: bool = False, include_basic_fractions: bool = False, include_intermediate_fractions: bool = False, include_three_body: bool = False, n_states: int = 3, include_constant: bool = True) -> jnp.ndarray:
+def sindy_library_factory(poly_order: int, n_states: int = 3, include_sine: bool = False, include_basic_fractions: bool = False, include_intermediate_fractions: bool = False, include_three_body: bool = False, include_constant: bool = True) -> jnp.ndarray:
     """
     Create a SINDy (Sparse Identification of Nonlinear Dynamics) library for the given polynomial order and states.
     
     Parameters:
     poly_order (int): Maximum order of polynomials.
+    n_states (int, optional): Number of states. Defaults to 3.
     include_sine (bool, optional): If True, includes sine functions in the library. Defaults to False.
     include_basic_fractions (bool, optional): If True, includes basic fractions in the library. Defaults to False.
     include_intermediate_fractions (bool, optional): If True, includes intermediate fractions in the library. Defaults to False.
     include_three_body (bool, optional): If True, includes three-body fractions in the library. Defaults to False.
-    n_states (int, optional): Number of states. Defaults to 3.
     include_constant (bool, optional): If True, includes a constant term in the library. Defaults to True.
     
     Returns:
@@ -209,6 +245,7 @@ def sindy_library_factory(poly_order: int, include_sine: bool = False, include_b
         return library
 
     return sindy_library
+
 
 def test_sindy_library():
     # Define test configurations

@@ -1,11 +1,12 @@
 import warnings
-from sindyLibrary import create_sindy_library, polynomial_degrees
+from sindyLibrary import sindy_library_factory, polynomial_degrees
 import jax.numpy as jnp
 from scipy.integrate import solve_ivp
 
-def sindy_simulate(x0, t, Xi, poly_order, include_sine):
+def sindy_simulate(x0, t, Xi, **library_kwargs):
     n = x0.size
-    sindy_library = create_sindy_library(poly_order, include_sine, n)
+    library_kwargs["n_states"] = n
+    sindy_library = sindy_library_factory(**library_kwargs)
     
     def f(t, x):
         library_features = sindy_library(jnp.array(x).reshape((1, n)))
@@ -17,7 +18,7 @@ def sindy_simulate(x0, t, Xi, poly_order, include_sine):
     
     return sol.y.T
 
-def sindy_simulate_order2(x0, dx0, t, Xi, poly_order, include_sine):
+def sindy_simulate_order2(x0, dx0, t, Xi, **library_kwargs):
     n = 2 * x0.size
     l = Xi.shape[0]
     
@@ -27,7 +28,7 @@ def sindy_simulate_order2(x0, dx0, t, Xi, poly_order, include_sine):
         Xi_order1 = Xi_order1.at[:, i + n // 2].set(Xi[:, i])
     
     initial_condition = jnp.concatenate((x0, dx0))
-    x = sindy_simulate(initial_condition, t, Xi_order1, poly_order, include_sine)
+    x = sindy_simulate(initial_condition, t, Xi_order1, **library_kwargs)
     return x
 
 
@@ -39,7 +40,7 @@ if __name__ == "__main__":
     X = jnp.array([1, 2, 3, 4]).reshape(2, -1)
     print("Input Data:\n", X)
 
-    my_function = create_sindy_library(poly_order=2, include_sine=False, n_states=2)
+    my_function = sindy_library_factory(poly_order=2, include_sine=False, n_states=2)
     print("Polynomial Degrees:\n", polynomial_degrees(2, 2))
     print("SINDy Library Features:\n", my_function(X))
 
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     x_simulated = sindy_simulate(x0, t, Xi, poly_order=2, include_sine=False)
     print("SINDy Simulation Results:\n", x_simulated)
 
-    # Testing sindy_simulate_order2
-    dx0 = jnp.array([0.0, 0.0])
-    x_simulated_order2 = sindy_simulate_order2(x0, dx0, t, Xi, poly_order=2, include_sine=False)
-    print("SINDy Second-Order Simulation Results:\n", x_simulated_order2)
+    # # Testing sindy_simulate_order2
+    # dx0 = jnp.array([0.0, 0.0])
+    # x_simulated_order2 = sindy_simulate_order2(x0, dx0, t, Xi, poly_order=2, include_sine=False)
+    # print("SINDy Second-Order Simulation Results:\n", x_simulated_order2)

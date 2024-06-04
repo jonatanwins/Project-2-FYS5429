@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.special import legendre
 import jax
 from jax import random
-from sindy_utils import library_size
+from sindyLibrary import library_size
 from trainer import SINDy_trainer
 from jax.lib import xla_bridge
 import sys

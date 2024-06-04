@@ -8,7 +8,7 @@ Some slight modifications where made to troubleshoot memory bugs and modernize t
 
 import sys
 sys.path.append("../")
-from sindy_utils import library_size
+from sindyLibrary import library_size
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.special import legendre

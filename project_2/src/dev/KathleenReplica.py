@@ -120,7 +120,7 @@ validation_data = get_dummy_dataloader(num_datapoints_val, num_features, batch_s
 
 # %%
 from jax import random
-from sindy_utils import library_size
+from sindyLibrary import library_size
 from trainer import Trainer
 
 # Set random key and hyperparameters
@@ -188,7 +188,7 @@ xi = xi * mask
 print(xi)
 
 # %%
-from sindy_utils import get_expression
+from sindyLibrary import get_expression
 
 expression = get_expression(xi, poly_order=poly_order, include_sine=False)
 #print(expression)

@@ -286,7 +286,7 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
     return loss_dynamics_z_second_order
 
 
-def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, include_sine: bool = False, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False) -> Callable:
+def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False, **library_kwargs) -> Callable:
     """
     Create a loss function for different SINDy libraries.
 
@@ -302,7 +302,10 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
     Returns:
         Callable: Loss function.
     """
-    sindy_library = sindy_library_factory(poly_order, include_sine, n_states=latent_dim)
+    if second_order:
+        library_kwargs['n_states'] *= 2
+
+    sindy_library = sindy_library_factory(**library_kwargs)
     recon_weight, x_weight, z_weight, reg_weight = weights
 
     # Unpacking autoencoder

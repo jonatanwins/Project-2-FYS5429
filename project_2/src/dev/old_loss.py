@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax import jacobian, grad
-from sindy_utils import create_sindy_library, add_sine
+from sindyLibrary import create_sindy_library, add_sine
 from typing import Tuple
 from jax import Array
 from type_utils import ModelLayers, ModelParams
@@ -214,7 +214,7 @@ if __name__ == "__main__":
     # lets thest the loss function
     from jax import random, tree_map
     import jax.numpy as jnp
-    from sindy_utils import library_size
+    from sindyLibrary import library_size
     from autoencoder import Autoencoder, Encoder, Decoder
     from flax import linen as nn
     from flax.core.frozen_dict import freeze
