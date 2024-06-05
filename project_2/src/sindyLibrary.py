@@ -3,289 +3,206 @@ from jax import vmap
 from scipy.special import binom
 from itertools import product
 from jax import Array
-from jax import jit
 
-def library_size(poly_order: int, include_sine: bool = False, include_basic_fractions: bool = False, include_intermediate_fractions: bool = False, include_three_body: bool = False, n_states: int = 3, include_constant: bool = True) -> int:
+def library_size(n_states: int, poly_order: int, include_sine: bool = False, include_constant: bool = True) -> int:
     """
-    Calculate the size of the library based on the number of states, polynomial order, and various options for additional features.
-    
-    Parameters:
-    poly_order (int): Maximum order of polynomials.
-    include_sine (bool, optional): If True, includes sine functions in the library. Defaults to False.
-    include_basic_fractions (bool, optional): If True, includes basic fractions in the library. Defaults to False.
-    include_intermediate_fractions (bool, optional): If True, includes intermediate fractions in the library. Defaults to False.
-    include_three_body (bool, optional): If True, includes three-body fractions in the library. Defaults to False.
-    n_states (int, optional): Number of states. Defaults to 3.
-    include_constant (bool, optional): If True, includes a constant term in the library. Defaults to True.
-    
+    Calculate the size of the library based on the given parameters.
+
+    Args:
+        poly_order (int): The highest order of polynomials to include.
+        include_sine (bool): Whether to include sine terms.
+        n_states (int): The number of state variables.
+        include_constant (bool): Whether to include a constant term.
+
     Returns:
-    int: Size of the library.
+        int: The total number of terms in the library.
     """
     l = 0
     for k in range(poly_order + 1):
         l += int(binom(n_states + k - 1, k))
     if include_sine:
         l += n_states
-    if include_basic_fractions:
-        l += n_states ** 2
-    if include_intermediate_fractions:
-        l += 3 * n_states ** 2
-    if include_three_body and n_states == 3:
-        l += n_states * (n_states - 1) * (n_states - 2) // 6
     if not include_constant:
         l -= 1
     return l
 
 def polynomial_degrees(n_states: int, poly_order: int) -> Array:
     """
-    Generate all combinations of polynomial degrees for the given number of states and polynomial order.
-    
-    Parameters:
-    n_states (int): Number of states.
-    poly_order (int): Maximum order of polynomials.
-    
+    Generate all possible polynomial degrees up to a given order.
+
+    Args:
+        n_states (int): The number of state variables.
+        poly_order (int): The highest order of polynomials to include.
+
     Returns:
-    Array: Array of polynomial degrees.
+        Array: An array of polynomial degrees.
     """
     degrees = jnp.array(list(product(range(poly_order + 1), repeat=n_states)))
     sums = jnp.sum(degrees, axis=1)
     degrees = degrees[(sums <= poly_order) & (sums > 1)][::-1]
     return degrees
 
-def polynomial(x, degree):
+def polynomial(x: Array, degree: Array) -> Array:
+    """
+    Compute the polynomial for a given degree.
+
+    Args:
+        x (Array): The input array.
+        degree (Array): The degree array.
+
+    Returns:
+        Array: The computed polynomial value.
+    """
     return jnp.prod(x ** degree)
 
-def polynomial_features(X, degrees):
-    all_polynomials = vmap(polynomial, in_axes=(None, 0))
-    all_features = vmap(all_polynomials, in_axes=(0, None))
-    return all_features(X, degrees)
+def polynomial_features(x: Array, degrees: Array) -> Array:
+    """
+    Compute polynomial features for a given set of degrees.
 
-def add_polynomials(features: Array, library: Array, degrees) -> Array:
-    """
-    Add polynomial features to the SINDy library.
-    
-    Parameters:
-    features (Array): Input features.
-    library (Array): Existing SINDy library.
-    
-    Returns:
-    Array: Updated SINDy library with polynomial features.
-    """
-    polynomial_library = polynomial_features(features, degrees)
-    library = jnp.concatenate([library, polynomial_library], axis=1)
-    return library
-
-def add_sine(features: Array, library: Array) -> Array:
-    """
-    Add sine functions to the SINDy library.
-    
-    Parameters:
-    features (Array): Input features.
-    library (Array): Existing SINDy library.
-    
-    Returns:
-    Array: Updated SINDy library with sine functions.
-    """
-    sine = jnp.sin(features)
-    library = jnp.concatenate([library, sine], axis=1)
-    return library
-
-def add_basic_fractions(features: Array, library: Array) -> Array:
-    """
-    Add basic fractions to the SINDy library.
-
-    Parameters:
-    features (Array): Input features.
-    library (Array): Existing SINDy library.
+    Args:
+        x (Array): The input array.
+        degrees (Array): The degrees array.
 
     Returns:
-    Array: Updated SINDy library with basic fractions.
+        Array: The polynomial features.
     """
-    def single_sample_fractions(sample: Array):
-        denominators = jnp.repeat(sample, len(sample))
-        numerators = jnp.tile(sample, len(sample))
+    return vmap(lambda degree: polynomial(x, degree))(degrees)
 
-        def divide(n, d):
-            return n / d
-
-        vectorized_divide = vmap(divide)
-        fractions = vectorized_divide(numerators, denominators)
-        return fractions
-
-    basic_fractions = vmap(single_sample_fractions)(features)
-    return jnp.concatenate([library, basic_fractions], axis=1)
-
-def add_intermediate_fractions(features: Array, library: Array) -> Array:
+def add_polynomials(x: Array, library: Array, degrees: Array) -> Array:
     """
-    Add intermediate fractions to the SINDy library.
-    
-    Parameters:
-    features (Array): Input features.
-    library (Array): Existing SINDy library.
-    
+    Add polynomial terms to the library.
+
+    Args:
+        x (Array): The input array.
+        library (Array): The existing library.
+        degrees (Array): The degrees array.
+
     Returns:
-    Array: Updated SINDy library with intermediate fractions.
+        Array: The updated library with polynomial terms.
     """
-    def devide(n, d):
-        return n / d
-    
-    num_features = features.shape[1]
+    polynomial_library = polynomial_features(x, degrees)
+    return jnp.concatenate([library, polynomial_library], axis=0)
 
-    def single_sample_intermediate_fractions(sample: Array):
-        sample_col = sample[:, jnp.newaxis]
-        sample_row = sample[jnp.newaxis, :]
-
-        differences_matrix = sample_col - sample_row
-
-        # Extract the upper triangle and the lower triangle separately, skipping the diagonal
-        upper_triangle = differences_matrix[jnp.triu_indices(num_features, k=1)]
-        lower_triangle = differences_matrix[jnp.tril_indices(num_features, k=-1)]
-
-        # Then, concatenate the upper and lower triangles to get the result without the diagonal
-        differences= jnp.concatenate([upper_triangle, lower_triangle]).flatten()
-       
-        #we need to tile differences num_features times
-        differences_tiled = jnp.tile(differences, num_features)
-        sample_repeat_1 = jnp.repeat(sample, num_features)
-        fractions_1 = vmap(devide)(differences_tiled, sample_repeat_1) 
-        fractions_2 = vmap(devide)(sample_repeat_1, differences_tiled)
-
-
-        product_matrix = sample_col * sample_row
-
-        # Get the indices for the upper triangle, excluding the diagonal
-        triu_indices = jnp.triu_indices(num_features, k=1)
-
-        # Use these indices to select the elements from the product matrix (avoiding duplicates and diagonal)
-        upper_tri_products = product_matrix[triu_indices]
-        upper_tri_products = upper_tri_products.flatten()
-
-        number_of_elm = num_features * (num_features - 1) // 2 #number of elements in upper triangle
-
-        #we need to repeat the upper_tri_products num_features times
-        upper_tri_products = jnp.tile(upper_tri_products, num_features)
-
-        #we need matchin size of sample for vmapping
-        sample_repeat_2 = jnp.repeat(sample, number_of_elm)
-        fractions_3 = vmap(devide)(upper_tri_products, sample_repeat_2)
-        fractions_4 = vmap(devide)(sample_repeat_2, upper_tri_products)
-
-        fractions = jnp.concatenate([fractions_1, fractions_2, fractions_3, fractions_4])
-        return fractions
-    
-    intermediate_fractions = vmap(single_sample_intermediate_fractions)(features)
-    return jnp.concatenate([library, intermediate_fractions], axis=1)
-
-
-def add_three_body_fractions(features: Array, library: Array) -> Array:
+def add_sine(x: Array, library: Array) -> Array:
     """
-    Add three-body fractions to the SINDy library.
-    
-    Parameters:
-    features (Array): Input features (assumed to be positions).
-    library (Array): Existing SINDy library.
-    
+    Add sine terms to the library.
+
+    Args:
+        x (Array): The input array.
+        library (Array): The existing library.
+
     Returns:
-    Array: Updated SINDy library with three-body fractions.
+        Array: The updated library with sine terms.
     """
-    def single_sample_three_body_fractions(sample: Array):
-        r12 = sample[0] - sample[1]
-        r13 = sample[0] - sample[2]
-        r23 = sample[1] - sample[2]
+    sine = jnp.sin(x)
+    return jnp.concatenate([library, sine], axis=0)
 
-        norm_r12 = jnp.linalg.norm(r12)
-        norm_r13 = jnp.linalg.norm(r13)
-        norm_r23 = jnp.linalg.norm(r23)
-
-        three_body_fractions = jnp.concatenate([
-            - r12 / norm_r12 ** 3 - r13 / norm_r13 ** 3,
-            - r23 / norm_r23 ** 3 - r12 / norm_r12 ** 3,
-            - r13 / norm_r13 ** 3 - r23 / norm_r23 ** 3
-        ])
-        return three_body_fractions
-
-    three_body_fractions = vmap(single_sample_three_body_fractions)(features)
-    return jnp.concatenate([library, three_body_fractions], axis=1)
-
-def sindy_library_factory(poly_order: int, n_states: int = 3, include_sine: bool = False, include_basic_fractions: bool = False, include_intermediate_fractions: bool = False, include_three_body: bool = False, include_constant: bool = True) -> jnp.ndarray:
+def polynomial_transform_factory(poly_order: int, n_states: int) -> callable:
     """
-    Create a SINDy (Sparse Identification of Nonlinear Dynamics) library for the given polynomial order and states.
-    
-    Parameters:
-    poly_order (int): Maximum order of polynomials.
-    n_states (int, optional): Number of states. Defaults to 3.
-    include_sine (bool, optional): If True, includes sine functions in the library. Defaults to False.
-    include_basic_fractions (bool, optional): If True, includes basic fractions in the library. Defaults to False.
-    include_intermediate_fractions (bool, optional): If True, includes intermediate fractions in the library. Defaults to False.
-    include_three_body (bool, optional): If True, includes three-body fractions in the library. Defaults to False.
-    include_constant (bool, optional): If True, includes a constant term in the library. Defaults to True.
-    
+    Factory function to create a polynomial transform function based on the provided parameters.
+
+    Args:
+        poly_order (int): The highest order of polynomials to include.
+        n_states (int): The number of state variables.
+
     Returns:
-    function: Function to generate the SINDy library.
+        callable: A function that adds polynomial terms to the library.
     """
     degrees = polynomial_degrees(n_states, poly_order)
-    if n_states == 1: 
-        degrees = degrees[::-1] # Reverse the order of the polynomial degrees for 1D case, more natural ordering
+    if n_states == 1:
+        degrees = degrees[::-1]
+    return lambda x, library: add_polynomials(x, library, degrees)
 
-    def sindy_library(features: Array) -> Array:
-        library = features
+def sine_transform_factory() -> callable:
+    """
+    Factory function to create a sine transform function.
+
+    Returns:
+        callable: A function that adds sine terms to the library.
+    """
+    return lambda x, library: add_sine(x, library)
+
+def sindy_library_factory(poly_order: int = 1, n_states: int = 1, include_sine: bool = False, include_constant: bool = True) -> callable:
+    """
+    Factory function to create a SINDy library function based on the provided parameters.
+
+    Args:
+        poly_order (int): The highest order of polynomials to include.
+        n_states (int): The number of state variables.
+        include_sine (bool): Whether to include sine terms.
+        include_constant (bool): Whether to include a constant term.
+
+    Returns:
+        callable: A function that generates the SINDy library for given input.
+    """
+    polynomial_transform = polynomial_transform_factory(poly_order, n_states)
+    sine_transform = sine_transform_factory()
+    constant_transform = lambda x, library: jnp.concatenate([jnp.ones((1,)), library], axis=0)
+
+    def sindy_library(x: jnp.ndarray) -> jnp.ndarray:
+        """
+        Generate the SINDy library for given input x.
+
+        Args:
+            x (jnp.ndarray): The input array.
+
+        Returns:
+            jnp.ndarray: The SINDy library.
+        """
+        library = x
         if poly_order > 1:
-            library = add_polynomials(features, library, degrees)
+            library = polynomial_transform(x, library)
         if include_constant:
-            ones = jnp.ones((features.shape[0], 1))
-            library = jnp.concatenate([ones, library], axis=1)
+            library = constant_transform(x, library)
         if include_sine:
-            library = add_sine(features, library)
-        if include_basic_fractions:
-            library = add_basic_fractions(features, library)
-        if include_intermediate_fractions:
-            library = add_intermediate_fractions(features, library)
-        if include_three_body and n_states == 3:
-            library = add_three_body_fractions(features, library)
+            library = sine_transform(x, library)
         return library
 
     return sindy_library
 
-
-def test_sindy_library():
-    # Define test configurations
+def test_sindy_library() -> None:
+    """
+    Test the SINDy library with various configurations to ensure correctness.
+    """
     test_cases = [
-        {"poly_order": 2, "n_states": 3, "include_sine": False, "include_basic_fractions": True, "include_intermediate_fractions": False, "include_three_body": False, "include_constant": True},
-        {"poly_order": 2, "n_states": 2, "include_sine": True, "include_basic_fractions": False, "include_intermediate_fractions": True, "include_three_body": False, "include_constant": True},
-        {"poly_order": 3, "n_states": 4, "include_sine": False, "include_basic_fractions": False, "include_intermediate_fractions": False, "include_three_body": True, "include_constant": False},
-        {"poly_order": 2, "n_states": 1, "include_sine": False, "include_basic_fractions": False, "include_intermediate_fractions": False, "include_three_body": False, "include_constant": True},  # Basic test case without any fractions
+        {"poly_order": 2, "n_states": 3, "include_sine": False, "include_constant": True},
+        {"poly_order": 2, "n_states": 2, "include_sine": True, "include_constant": True},
+        {"poly_order": 3, "n_states": 4, "include_sine": False, "include_constant": False},
+        {"poly_order": 2, "n_states": 1, "include_sine": False, "include_constant": True},
+        {"poly_order": 1, "n_states": 1, "include_sine": False, "include_constant": False}
     ]
-    #test_cases = [test_cases[0]]  # Select a single test case for now
+    #test_cases = [test_cases[1]]
 
     for case in test_cases:
         n_states = case["n_states"]
-        
-        # Generate test data with the correct shape
+
         test_features = jnp.array([jnp.arange(1, n_states + 1, dtype=float) + i for i in range(2)])
         larger_test_features = jnp.array([jnp.arange(1, n_states + 1, dtype=float) + i for i in range(3)])
 
+
         print(f"Testing with config: {case}")
-        sindy_lib = sindy_library_factory(case["poly_order"], case["include_sine"], case["include_basic_fractions"], case["include_intermediate_fractions"], case["include_three_body"], case["n_states"], case["include_constant"])
-        sindy_lib = jit(sindy_lib)
+        sindy_lib = sindy_library_factory(case["poly_order"], n_states, case["include_sine"], case["include_constant"])
+        sindy_lib = vmap(sindy_lib)
         library = sindy_lib(test_features)
         larger_library = sindy_lib(larger_test_features)
-        # print("Test features:")    
-        # print(test_features)
-        # print("Library:")
-        # print(library)
-        # print("Larger test features:")    
-        # print(larger_test_features)
-        # print("Larger Library:")
-        #print(larger_library)
+        
+        print("Test features:")    
+        print(test_features)
+        print("Library:")
+        print(library)
+
+        print("Larger test features:")
+        print(larger_test_features)
+        print("Larger Library:")
+        print(larger_library)
+
         lib_size = library.shape[1]
         lib_size_larger = larger_library.shape[1]
-        lib_size_func = library_size(case["poly_order"], case["include_sine"], case["include_basic_fractions"], case["include_intermediate_fractions"], case["include_three_body"], case["n_states"], case["include_constant"])
+        lib_size_func = library_size(case["poly_order"], case["include_sine"], case["n_states"], case["include_constant"])
 
-        #assert library size is equal to second dimension of library
         print("Library size from function: ", lib_size_func)
         print("Library size Larger input : ", lib_size_larger)
         print("Library size test input: ", lib_size)
-        #assert lib_size == lib_size_func == lib_size_larger
 
 if __name__ == "__main__":
     test_sindy_library()

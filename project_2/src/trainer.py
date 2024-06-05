@@ -1,7 +1,7 @@
 """
-Large parts of this module was created by Phillip Lippe (Revision cf18eb5d, 2022), and is part of 
+Large parts of this module were created by Phillip Lippe (Revision cf18eb5d, 2022), and is part of 
 Guide 4: Research Projects with JAX https://uvadlc-notebooks.readthedocs.io/en/latest/tutorial_notebooks/guide4/Research_Projects_with_JAX.html
-which is part of UVA DEEP LEARNING COURSE https://uvadlc.github.io/
+which is part of the UVA DEEP LEARNING COURSE https://uvadlc.github.io/
 """
 
 from autoencoder import Autoencoder, Encoder, Decoder
@@ -41,48 +41,54 @@ def update_mask(coefficients, threshold=0.1):
 class SINDy_trainer:
     def __init__(
         self,
-        input_dim: int,
-        latent_dim: int,
-        poly_order: int,
         widths: list,
-        exmp_input: Any,
         activation: str = 'tanh',
         weight_initializer: str = 'xavier_uniform',
         bias_initializer: str = 'zeros',
-        loss_factory: Callable[[int, int, bool, tuple, bool], Callable] = loss_fn_factory,
+        input_dim: int = None,
+        latent_dim: int = None,
+        poly_order: int = None,
+        include_sine: bool = False,
+        include_constant: bool = True,
+        exmp_input: Any = None,
+        loss_weights: Tuple[float, float, float, float] = (1, 1, 40, 1),
+        regularization: bool = True,
+        second_order: bool = False,
         optimizer_hparams: Dict[str, Any] = {},
-        loss_params: Dict[str, Any] = {},
+        update_mask_every_n_epoch: int = 500,
+        coefficient_threshold: float = 0.1,
         seed: int = 42,
         logger_params: Dict[str, Any] = None,
         enable_progress_bar: bool = True,
         debug: bool = False,
-        check_val_every_n_epoch: int = 500,
-        update_mask_every_n_epoch: int = 500,
-        coefficient_threshold: float = 0.1, 
+        check_val_every_n_epoch: int = 500
     ):
         """
         Trainer module for holding all parts required for training a model. 
         This includes the model, optimizer, loss function, and the training loop.
 
         Args:
-            input_dim (int): Input dimension of the data.
-            latent_dim (int): Dimension of the latent space.
-            poly_order (int): Polynomial order for the SINDy library.
             widths (list): List of layer widths for the encoder and decoder. Assumes the same for both.
-            exmp_input (Any): Example input to initialize the autoencoder model.
             activation (str): Activation function for the encoder and decoder. Defaults to 'tanh'.
             weight_initializer (str): Weight initializer for the encoder and decoder. Defaults to 'xavier_uniform'.
             bias_initializer (str): Bias initializer for the encoder and decoder. Defaults to 'zeros'.
-            loss_factory (Callable[[int, int, bool, tuple, bool], Callable], optional): Factory function for the loss function. Defaults to loss_fn_factory.
-            optimizer_hparams (Dict[str, Any], optional): Hyperparameters for the optimizer. Defaults to {}.
-            loss_params (Dict[str, Any], optional): Parameters for the loss function. Defaults to {}.
-            seed (int, optional): Random seed. Defaults to 42.
-            logger_params (Dict[str, Any], optional): Parameters for the logger. Defaults to None.
-            enable_progress_bar (bool, optional): Whether to enable progress bar. Defaults to True.
-            debug (bool, optional): Whether to jit the loss functions. Defaults to False.
-            check_val_every_n_epoch (int, optional): Check validation every n epoch. Defaults to 500.
-            update_mask_every_n_epoch (int, optional): Update mask every n epoch. Defaults to 500.
-            coefficient_threshold (float, optional): Threshold for updating the mask. Defaults to 0.1.
+            input_dim (int): Input dimension of the data.
+            latent_dim (int): Dimension of the latent space.
+            poly_order (int): Polynomial order for the SINDy library.
+            include_sine (bool): Whether to include sine functions in the SINDy library. Defaults to False.
+            include_constant (bool): Whether to include a constant term in the SINDy library. Defaults to True.
+            exmp_input (Any): Example input to initialize the autoencoder model.
+            loss_weights (Tuple[float, float, float, float]): Weights for the loss functions. Defaults to (1, 1, 40, 1).
+            regularization (bool): Whether to include regularization loss. Defaults to True.
+            second_order (bool): Whether to include second-order dynamics. Defaults to False.
+            optimizer_hparams (Dict[str, Any]): Hyperparameters for the optimizer. Defaults to {}.
+            update_mask_every_n_epoch (int): Update mask every n epoch. Defaults to 500.
+            coefficient_threshold (float): Threshold for updating the mask. Defaults to 0.1.
+            seed (int): Random seed. Defaults to 42.
+            logger_params (Dict[str, Any]): Parameters for the logger. Defaults to None.
+            enable_progress_bar (bool): Whether to enable progress bar. Defaults to True.
+            debug (bool): Whether to jit the loss functions. Defaults to False.
+            check_val_every_n_epoch (int): Check validation every n epoch. Defaults to 500.
         """
         self.seed = seed
 
@@ -90,15 +96,26 @@ class SINDy_trainer:
         self.model_hparams = {
             'input_dim': input_dim,
             'latent_dim': latent_dim,
-            'poly_order': poly_order,
             'widths': widths,
             'activation': activation,
             'weight_initializer': weight_initializer,
             'bias_initializer': bias_initializer,
         }
 
+        ### Hyperparameters for SINDy library
+        self.library_hparams = {
+            'poly_order': poly_order,
+            'include_sine': include_sine,
+            'include_constant': include_constant
+        }
+
         ### Setting up library size for the model parameters
-        lib_size = library_size(self.model_hparams['latent_dim'], poly_order=self.model_hparams['poly_order'], use_sine=False)
+        lib_size = library_size(
+            latent_dim=latent_dim,
+            poly_order=poly_order,
+            include_sine=include_sine,
+            include_constant=include_constant
+        )
         self.model_hparams['lib_size'] = lib_size
 
         ### Store model parameters
@@ -107,22 +124,23 @@ class SINDy_trainer:
         self.debug = debug
         self.check_val_every_n_epoch = check_val_every_n_epoch
         self.update_mask_every_n_epoch = update_mask_every_n_epoch
-        self.loss_params = loss_params
+        self.coefficient_threshold = coefficient_threshold
+        self.loss_params = {
+            'autoencoder': None,  # Will be set after model initialization
+            'weights': loss_weights,
+            'regularization': regularization,
+            'second_order': second_order,
+            **self.library_hparams  # Merge library_hparams into loss_params
+        }
         self.logger_params = logger_params
 
         # Store hyperparameters for trainer and model
         self.hparams = {
-                "input_dim": input_dim,
-                "latent_dim": latent_dim,
-                "poly_order": poly_order,
-                "widths": widths,
-                "activation": activation,
-                "weight_initializer": weight_initializer,
-                "bias_initializer": bias_initializer,
-                "optimizer_hparams": optimizer_hparams,
-                "loss_params": loss_params,
-                "update_mask_every_n_epoch": update_mask_every_n_epoch,
-                "coefficient_threshold": coefficient_threshold,
+            **self.model_hparams,
+            **self.loss_params,
+            'optimizer_hparams': optimizer_hparams,
+            'update_mask_every_n_epoch': update_mask_every_n_epoch,
+            'coefficient_threshold': coefficient_threshold
         }
 
         ### Define the autoencoder model
@@ -131,7 +149,8 @@ class SINDy_trainer:
         self._init_model_state(exmp_input)
 
         ### Define the loss function from the factory
-        self.loss_fn = loss_factory(autoencoder=self.model, **self.loss_params)
+        self.loss_params['autoencoder'] = self.model  # Set autoencoder in loss_params
+        self.loss_fn = loss_fn_factory(**self.loss_params)
         
         self.create_jitted_functions()
 
@@ -363,7 +382,7 @@ class SINDy_trainer:
         print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")
         new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
         new_loss_params['regularization'] = False  # Update the copy with regularization=False
-        self.loss_fn = loss_fn_factory(autoencoder=self.model, **new_loss_params)  # Create the new loss function
+        self.loss_fn = loss_fn_factory(**new_loss_params)  # Create the new loss function
         self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
 
         #### Final training loop
@@ -402,15 +421,11 @@ class SINDy_trainer:
         """
         metrics = defaultdict(float)
         num_train_steps = len(train_loader)
-        #start_time = time.time()
         for batch in train_loader:
-            #print("training batch")
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps
         metrics = {key: metrics[key].item() for key in metrics}
-        #print(f"Inner training loop time: {time.time() - start_time}")
-        #metrics["epoch_time"] = time.time() - start_time
         return metrics
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:
@@ -527,30 +542,33 @@ class SINDy_trainer:
 
         # Create the trainer instance with the loaded hyperparameters
         trainer = cls(
-            input_dim=hparams["input_dim"],
-            latent_dim=hparams["latent_dim"],
-            poly_order=hparams["poly_order"],
             widths=hparams["widths"],
-            exmp_input=exmp_input,
             activation=hparams["activation"],
             weight_initializer=hparams["weight_initializer"],
             bias_initializer=hparams["bias_initializer"],
-            optimizer_hparams=hparams.get("optimizer_hparams", {}),
-            loss_params=hparams.get("loss_params", {}),
+            input_dim=hparams["input_dim"],
+            latent_dim=hparams["latent_dim"],
+            poly_order=hparams["poly_order"],
+            include_sine=hparams["include_sine"],
+            include_constant=hparams["include_constant"],
+            exmp_input=exmp_input,
+            loss_weights=hparams["loss_weights"],
+            regularization=hparams["regularization"],
+            second_order=hparams["second_order"],
+            optimizer_hparams=hparams["optimizer_hparams"],
+            update_mask_every_n_epoch=hparams["update_mask_every_n_epoch"],
+            coefficient_threshold=hparams["coefficient_threshold"],
             seed=hparams.get("seed", 42),
             logger_params=hparams.get("logger_params", {}),
             enable_progress_bar=hparams.get("enable_progress_bar", True),
             debug=hparams.get("debug", False),
-            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500),
-            update_mask_every_n_epoch=hparams.get("update_mask_every_n_epoch", 500),
-            coefficient_threshold=hparams.get("coefficient_threshold", 0.1),
+            check_val_every_n_epoch=hparams.get("check_val_every_n_epoch", 500)
         )
 
         # Load the model and optimizer state from the checkpoint
         trainer.load_model(checkpoint)
 
         return trainer
-
 
 
     def load_model(self, checkpoint: str):

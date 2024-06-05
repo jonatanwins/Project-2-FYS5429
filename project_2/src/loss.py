@@ -42,12 +42,12 @@ def recon_loss_factory() -> Callable:
 
     return recon_loss
 
-def loss_dynamics_x_factory(decoder: nn.Module):
+def loss_dynamics_x_factory(decoder: nn.Module, sindy_library_fn: Callable):
 
     def psi(params, z):
         return decoder.apply({"params": params}, z)
     
-    def dynamics_x_residual(params: ModelParams, z: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array):
+    def dynamics_x_residual(params: ModelParams, z: Array, dx_dt: Array, xi: Array, mask: Array):
         """
         Loss for the dynamics in x for a single data point
 
@@ -63,6 +63,7 @@ def loss_dynamics_x_factory(decoder: nn.Module):
         Returns:
             Array -- Loss dynamics in x
         """
+        theta = sindy_library_fn(z)
         #jacobian_fn of decoder with respect to z
         dpsi_dz = jacfwd(psi, argnums=1)
         #sindy dz prediction in x space
@@ -286,7 +287,7 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
     return loss_dynamics_z_second_order
 
 
-def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False, **library_kwargs) -> Callable:
+def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, include_sine: bool = False, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False) -> Callable:
     """
     Create a loss function for different SINDy libraries.
 
@@ -302,10 +303,7 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
     Returns:
         Callable: Loss function.
     """
-    if second_order:
-        library_kwargs['n_states'] *= 2
-
-    sindy_library = sindy_library_factory(**library_kwargs)
+    sindy_library = sindy_library_factory(latent_dim, poly_order, include_sine)
     recon_weight, x_weight, z_weight, reg_weight = weights
 
     # Unpacking autoencoder
@@ -332,7 +330,7 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
 
         # Calculate z and x_hat
         z, x_hat = autoencoder.apply({"params": params}, x)
-        theta = sindy_library(z)
+        theta = vmap(sindy_library)(z)
         xi = params["sindy_coefficients"]
 
         encoder_params = params["encoder"]
@@ -376,9 +374,15 @@ if __name__ == "__main__":
 
     key = random.PRNGKey(0)
     input_dim = 128
+
     latent_dim = 3
     poly_order = 3
-    lib_size = library_size(latent_dim, poly_order)
+    include_sine = False
+    include_constant = True
+
+    lib_kwargs = {'n_states': latent_dim, 'poly_order': poly_order, 'include_sine': include_sine, 'include_constant': include_constant}
+
+    lib_size = library_size(**lib_kwargs)
 
     encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
     decoder = Decoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
@@ -420,4 +424,3 @@ if __name__ == "__main__":
     print(loss)
     print(losses)
     print(loss.shape)
-
