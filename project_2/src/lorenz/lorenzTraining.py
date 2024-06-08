@@ -1,14 +1,13 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.special import legendre
 import jax
 from jax import random
-from sindyLibrary import library_size
-from trainer import SINDy_trainer
 from jax.lib import xla_bridge
 import sys
+
 sys.path.append('../')
-from lorenzData import get_lorenz_test_data, get_lorenz_train_data, LorenzDataset
+
+#from sindyLibrary import library_size
+from trainer import SINDy_trainer
+from lorenzData import get_lorenz_train_data, LorenzDataset
 from data_utils import get_random_sample, JaxDocsLoader
 
 
@@ -48,8 +47,8 @@ validation_data = get_lorenz_train_data(n_ics_validation, noise_strength)
 validation_data_set = LorenzDataset(validation_data)
 validation_data_loader = JaxDocsLoader(validation_data_set, batch_size=batch_size_validation, num_workers=num_workers, pin_memory=pin_memory, drop_last=drop_last, timeout=timeout, worker_init_fn=worker_init_fn)
 
-# Set random key and hyperparameters
-key = random.PRNGKey(0)
+# # Set random key and hyperparameters
+# key = random.PRNGKey(0)
 input_dim = 128
 latent_dim = 3
 poly_order = 3
@@ -71,15 +70,14 @@ hparams = {
     'weight_initializer': 'xavier_uniform',
     'bias_initializer': 'zeros',
     'optimizer_hparams': {'optimizer': "adam"},
-    'loss_params': {
-        'latent_dim': latent_dim,
-        'poly_order': poly_order,
-        'include_sine': False,
-        'weights': (1, 1e-4, 0, 1e-5)
-    },
+    'include_sine': False,  # Extracted from loss_params
+    'loss_weights': (1, 1e-4, 0, 1e-5),  # Extracted from loss_params['weights']
     'seed': seed,
     'update_mask_every_n_epoch': 500,
-    'coefficient_threshold': 0.1
+    'coefficient_threshold': 0.1,
+    'regularization': True,  # Added default value
+    'second_order': False,  # Added default value
+    'include_constant': True  # Added default value
 }
 
 # Define other parameters dictionary
@@ -96,5 +94,7 @@ params = {**hparams, **trainer_params}
 
 # Initialize trainer
 trainer = SINDy_trainer(**params)
+
+
 
 trainer.train_model(training_data_loader, validation_data_loader, num_epochs=initial_epochs, final_epochs=final_epochs)

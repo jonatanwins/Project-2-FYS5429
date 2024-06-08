@@ -182,7 +182,10 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
         encoder_params = params["encoder"]
         decoder_params = params["decoder"]
 
-        dx_in_z = vmap(lambda x, dx: dphi_dx(encoder_params, x) @ dx)(x, dx) # dx in z space
+        dphi_dx_val = vmap(lambda x: dphi_dx(encoder_params, x))(x)
+
+        dx_in_z = jnp.einsum('bij,bj->bi', dphi_dx_val, dx)
+
 
         if second_order:
             theta = vmap(sindy_library_fn)(jnp.concatenate([z, dx_in_z], axis=1))
@@ -199,8 +202,10 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
             ddphi_dx2_val = vmap(lambda x: ddphi_dx2(encoder_params, x))(x)
             dpsi_dz2_val = vmap(lambda z: ddpsi_dz2(decoder_params, z))(z)
 
-            x_dynamics_loss_val = x_weight * loss_dynamics_x_second_order(ddx, theta, xi, mask, dx_in_z, dpsi_dz_val, dpsi_dz2_val)
-            z_dynamics_loss_val = z_weight * loss_dynamics_z_second_order(dx, ddx, theta, xi, mask, ddphi_dx2_val, dphi_dx) #passing func dphi_dx instead of dphi_dx_val???!!!
+            #ddx: Array, theta: Array, xi: Array, mask: Array, dx_in_z: Array, dpsi_dz_val: Array, dpsi_dz2_val: Array
+            x_dynamics_loss_val = x_weight * loss_dynamics_x_second_order(ddx, theta, xi, mask, dx_in_z, dpsi_dz_val, dpsi_dz2_val) 
+            #dx: Array, ddx: Array, theta: Array, xi: Array, mask: Array, ddphi_dx2_val: Array, dphi_dx_val: Array
+            z_dynamics_loss_val = z_weight * loss_dynamics_z_second_order(dx, ddx, theta, xi, mask, ddphi_dx2_val, dphi_dx_val) #passing func dphi_dx instead of dphi_dx_val???!!!
         else:
             x_dynamics_loss_val = x_weight * loss_dynamics_x(dx, theta, xi, mask, dpsi_dz_val)
             z_dynamics_loss_val = z_weight * loss_dynamics_z(theta, xi, mask, dx_in_z)

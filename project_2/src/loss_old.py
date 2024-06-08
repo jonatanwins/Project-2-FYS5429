@@ -42,12 +42,12 @@ def recon_loss_factory() -> Callable:
 
     return recon_loss
 
-def loss_dynamics_x_factory(decoder: nn.Module, sindy_library_fn: Callable):
+def loss_dynamics_x_factory(decoder: nn.Module) -> Callable:
 
     def psi(params, z):
         return decoder.apply({"params": params}, z)
     
-    def dynamics_x_residual(params: ModelParams, z: Array, dx_dt: Array, xi: Array, mask: Array):
+    def dynamics_x_residual(params: ModelParams, z: Array, dx_dt: Array, theta: Array, xi: Array, mask: Array):
         """
         Loss for the dynamics in x for a single data point
 
@@ -63,7 +63,6 @@ def loss_dynamics_x_factory(decoder: nn.Module, sindy_library_fn: Callable):
         Returns:
             Array -- Loss dynamics in x
         """
-        theta = sindy_library_fn(z)
         #jacobian_fn of decoder with respect to z
         dpsi_dz = jacfwd(psi, argnums=1)
         #sindy dz prediction in x space
@@ -116,6 +115,8 @@ def loss_dynamics_z_factory(encoder: nn.Module):
         #jacrev of encoder with respect to x
         dphi_dx = jacrev(phi, argnums=1)
         #dx from data in z space 
+        print(dphi_dx(params, x).shape)
+        print(dx_dt.shape)
         dx_in_z = dphi_dx(params, x) @ dx_dt
 
         return (dx_in_z - theta @ (mask * xi)) ** 2 #dx_in_z - sindy prediction for dz
@@ -191,7 +192,8 @@ def loss_dynamics_x_second_order_factory(decoder: nn.Module, encoder: nn.Module)
         # Compute the Jacobian of the encoder with respect to x
         dphi_dx = jacrev(phi, argnums=1)
         dphi_dx_val = dphi_dx(encoder_params, x)
-
+        print(dphi_dx_val.shape)
+        print(dx.shape)
         # Transform dx from x-space to z-space
         dx_in_z = dphi_dx_val @ dx
 
@@ -287,7 +289,7 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
     return loss_dynamics_z_second_order
 
 
-def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, include_sine: bool = False, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False) -> Callable:
+def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False, **library_kwargs) -> Callable:
     """
     Create a loss function for different SINDy libraries.
 
@@ -303,7 +305,7 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
     Returns:
         Callable: Loss function.
     """
-    sindy_library = sindy_library_factory(latent_dim, poly_order, include_sine)
+    sindy_library = sindy_library_factory(**library_kwargs)
     recon_weight, x_weight, z_weight, reg_weight = weights
 
     # Unpacking autoencoder
@@ -387,7 +389,7 @@ if __name__ == "__main__":
 
     encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
     decoder = Decoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
-    autoencoder = Autoencoder(input_dim=input_dim, sindy_input_features=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
+    autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
 
     # Create some random data
     key, subkey = random.split(key)
@@ -419,9 +421,9 @@ if __name__ == "__main__":
         mask=state.mask
     )
 
-    loss_fn = loss_fn_factory(autoencoder, latent_dim, poly_order, include_sine=False, weights=(1, 1, 40, 1), second_order=True)
+    loss_fn = loss_fn_factory(autoencoder, weights=(1, 1, 40, 1), second_order=False, **lib_kwargs)
 
-    loss, losses = loss_fn(state.params, (x, dx, ddx), state.mask)
+    loss, losses = loss_fn(state.params, (x, dx), state.mask)
     print(loss)
     print(losses)
     print(loss.shape)

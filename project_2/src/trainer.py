@@ -108,10 +108,12 @@ class SINDy_trainer:
             'include_sine': include_sine,
             'include_constant': include_constant
         }
-        if second_order:
-            self.library_hparams['n_states'] = 2*latent_dim #if second order, we concat z and dz as the features for the library
-        else:
-            self.library_hparams['n_states'] = latent_dim
+        # if second_order:
+        #     self.library_hparams['n_states'] = 2*latent_dim #if second order, we concat z and dz as the features for the library
+        # else:
+        #     self.library_hparams['n_states'] = latent_dim
+        ## ^ THIS BLOCK NEEDS TO BE COMMENTED OUT WHEN SECOND ORDER LOSS WORKS!
+        self.library_hparams['n_states'] = latent_dim # <--- THIS LINE NEEDS TO BE UNCOMMENTED WHEN SECOND ORDER LOSS WORKS!    
 
         ### Setting up library size for the model parameters
         lib_size = library_size(**self.library_hparams)
