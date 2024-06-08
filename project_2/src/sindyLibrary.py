@@ -9,9 +9,9 @@ def library_size(n_states: int, poly_order: int, include_sine: bool = False, inc
     Calculate the size of the library based on the given parameters.
 
     Args:
+        n_states (int): The number of state variables.
         poly_order (int): The highest order of polynomials to include.
         include_sine (bool): Whether to include sine terms.
-        n_states (int): The number of state variables.
         include_constant (bool): Whether to include a constant term.
 
     Returns:
@@ -97,13 +97,13 @@ def add_sine(x: Array, library: Array) -> Array:
     sine = jnp.sin(x)
     return jnp.concatenate([library, sine], axis=0)
 
-def polynomial_transform_factory(poly_order: int, n_states: int) -> callable:
+def polynomial_transform_factory(n_states: int, poly_order: int) -> callable:
     """
     Factory function to create a polynomial transform function based on the provided parameters.
 
     Args:
-        poly_order (int): The highest order of polynomials to include.
         n_states (int): The number of state variables.
+        poly_order (int): The highest order of polynomials to include.
 
     Returns:
         callable: A function that adds polynomial terms to the library.
@@ -122,20 +122,20 @@ def sine_transform_factory() -> callable:
     """
     return lambda x, library: add_sine(x, library)
 
-def sindy_library_factory(poly_order: int = 1, n_states: int = 1, include_sine: bool = False, include_constant: bool = True) -> callable:
+def sindy_library_factory(n_states: int = 1, poly_order: int = 1, include_sine: bool = False, include_constant: bool = True) -> callable:
     """
     Factory function to create a SINDy library function based on the provided parameters.
 
     Args:
-        poly_order (int): The highest order of polynomials to include.
         n_states (int): The number of state variables.
+        poly_order (int): The highest order of polynomials to include.
         include_sine (bool): Whether to include sine terms.
         include_constant (bool): Whether to include a constant term.
 
     Returns:
         callable: A function that generates the SINDy library for given input.
     """
-    polynomial_transform = polynomial_transform_factory(poly_order, n_states)
+    polynomial_transform = polynomial_transform_factory(n_states, poly_order)
     sine_transform = sine_transform_factory()
     constant_transform = lambda x, library: jnp.concatenate([jnp.ones((1,)), library], axis=0)
 
@@ -181,7 +181,7 @@ def test_sindy_library() -> None:
 
 
         print(f"Testing with config: {case}")
-        sindy_lib = sindy_library_factory(case["poly_order"], n_states, case["include_sine"], case["include_constant"])
+        sindy_lib = sindy_library_factory(case["n_states"], case["poly_order"], case["include_sine"], case["include_constant"])
         sindy_lib = vmap(sindy_lib)
         library = sindy_lib(test_features)
         larger_library = sindy_lib(larger_test_features)
@@ -198,7 +198,7 @@ def test_sindy_library() -> None:
 
         lib_size = library.shape[1]
         lib_size_larger = larger_library.shape[1]
-        lib_size_func = library_size(case["poly_order"], case["include_sine"], case["n_states"], case["include_constant"])
+        lib_size_func = library_size(case["n_states"], case["poly_order"], case["include_sine"], case["include_constant"])
 
         print("Library size from function: ", lib_size_func)
         print("Library size Larger input : ", lib_size_larger)

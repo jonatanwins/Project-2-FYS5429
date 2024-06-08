@@ -24,7 +24,7 @@ import jax.numpy as jnp
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from loss import loss_fn_factory
+from loss_old import loss_fn_factory
 from sindyLibrary import library_size
 
 
@@ -108,14 +108,14 @@ class SINDy_trainer:
             'include_sine': include_sine,
             'include_constant': include_constant
         }
+        if second_order:
+            self.library_hparams['n_states'] = 2*latent_dim #if second order, we concat z and dz as the features for the library
+        else:
+            self.library_hparams['n_states'] = latent_dim
 
         ### Setting up library size for the model parameters
-        lib_size = library_size(
-            latent_dim=latent_dim,
-            poly_order=poly_order,
-            include_sine=include_sine,
-            include_constant=include_constant
-        )
+        lib_size = library_size(**self.library_hparams)
+
         self.model_hparams['lib_size'] = lib_size
 
         ### Store model parameters
@@ -376,7 +376,7 @@ class SINDy_trainer:
                     self.save_metrics("best_eval", eval_metrics)
 
             if epoch_idx % self.update_mask_every_n_epoch == 0:
-                new_mask = update_mask(self.state.params["sindy_coefficients"])
+                new_mask = update_mask(self.state.params["sindy_coefficients"]) # Update the mask to be zero where the coefficients are small(do not need to mult by mask first)
                 self.state = self.state.replace(mask=new_mask)
             
         print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")

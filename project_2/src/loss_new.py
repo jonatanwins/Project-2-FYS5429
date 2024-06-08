@@ -146,8 +146,6 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
     Returns:
         Callable: Loss function.
     """
-    if second_order:
-        library_kwargs['n_states'] *= 2
 
     sindy_library_fn = sindy_library_factory(**library_kwargs)
     recon_weight, x_weight, z_weight, reg_weight = weights
@@ -202,7 +200,7 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
             dpsi_dz2_val = vmap(lambda z: ddpsi_dz2(decoder_params, z))(z)
 
             x_dynamics_loss_val = x_weight * loss_dynamics_x_second_order(ddx, theta, xi, mask, dx_in_z, dpsi_dz_val, dpsi_dz2_val)
-            z_dynamics_loss_val = z_weight * loss_dynamics_z_second_order(dx, ddx, theta, xi, mask, dx_in_z, ddphi_dx2_val, dphi_dx)
+            z_dynamics_loss_val = z_weight * loss_dynamics_z_second_order(dx, ddx, theta, xi, mask, ddphi_dx2_val, dphi_dx) #passing func dphi_dx instead of dphi_dx_val???!!!
         else:
             x_dynamics_loss_val = x_weight * loss_dynamics_x(dx, theta, xi, mask, dpsi_dz_val)
             z_dynamics_loss_val = z_weight * loss_dynamics_z(theta, xi, mask, dx_in_z)
@@ -226,6 +224,7 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
 
     return loss_fn
 
+
 if __name__ == "__main__":
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
@@ -235,14 +234,13 @@ if __name__ == "__main__":
 
     key = random.PRNGKey(0)
     input_dim = 128
-
     latent_dim = 3
     poly_order = 3
     include_sine = False
     include_constant = True
 
+    # First-order case
     lib_kwargs = {'n_states': latent_dim, 'poly_order': poly_order, 'include_sine': include_sine, 'include_constant': include_constant}
-
     lib_size = library_size(**lib_kwargs)
 
     encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
@@ -252,10 +250,8 @@ if __name__ == "__main__":
     # Create some random data
     key, subkey = random.split(key)
     x = random.normal(subkey, (10, input_dim))
-
     key, subkey = random.split(key)
     dx = random.normal(subkey, (10, input_dim))
-    ddx = random.normal(subkey, (10, input_dim))
 
     variables = autoencoder.init(subkey, x)
 
@@ -291,22 +287,36 @@ if __name__ == "__main__":
     print("Jitted first-order loss:", loss_first_order_jit)
     print("Jitted first-order loss components:", losses_first_order_jit)
 
-    key = random.PRNGKey(0)
-    input_dim = 128
-
-    latent_dim = 3
-    poly_order = 3
-    include_sine = False
-    include_constant = True
-
-    lib_kwargs = {'n_states': latent_dim*2, 'poly_order': poly_order, 'include_sine': include_sine, 'include_constant': include_constant}
-
+    # Second-order case
+    sindy_input_features = latent_dim * 2
+    lib_kwargs = {'n_states': sindy_input_features, 'poly_order': poly_order, 'include_sine': include_sine, 'include_constant': include_constant}
     lib_size = library_size(**lib_kwargs)
 
-    encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
-    decoder = Decoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
     autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
 
+    # Create some random data for second-order
+    key, subkey = random.split(key)
+    ddx = random.normal(subkey, (10, input_dim))
+
+    variables = autoencoder.init(subkey, x)
+
+    state = TrainState(
+        step=0,
+        apply_fn=autoencoder.apply,
+        params=variables["params"],
+        rng=subkey,
+        tx=None,
+        opt_state=None,
+        mask=variables['params']['sindy_coefficients'], # mask should be initialized with 1s just as sindy coefficients
+    )
+
+    state = TrainState.create(
+        apply_fn=state.apply_fn,
+        params=state.params,
+        tx=optimizer,
+        rng=state.rng,
+        mask=state.mask
+    )
 
     # Second-order dynamics test
     loss_fn_second_order = loss_fn_factory(autoencoder, weights=(1, 1, 40, 1), second_order=True, **lib_kwargs)

@@ -365,6 +365,7 @@ def loss_fn_factory(autoencoder: nn.Module, latent_dim: int, poly_order: int, in
         return total_loss, loss_dict
 
     return loss_fn
+
 if __name__ == "__main__":
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
@@ -386,7 +387,7 @@ if __name__ == "__main__":
 
     encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
     decoder = Decoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
-    autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
+    autoencoder = Autoencoder(input_dim=input_dim, sindy_input_features=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
 
     # Create some random data
     key, subkey = random.split(key)
