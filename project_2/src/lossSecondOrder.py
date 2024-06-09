@@ -151,13 +151,13 @@ def calculate_outputs_and_derivatives_second_order_factory(autoencoder: nn.Modul
 
     return calculate_outputs_and_derivatives
 
-def second_order_loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, float] = (1, 1e-4, 0, 1e-5), regularization: bool = True, **library_kwargs) -> Callable:
+def second_order_loss_fn_factory(autoencoder: nn.Module, loss_weights: Tuple[float, float, float, float] = (1, 1e-4, 0, 1e-5), regularization: bool = True, **library_kwargs) -> Callable:
     """
     Factory function to create a second-order loss function.
 
     Args:
         autoencoder (nn.Module): The autoencoder model.
-        weights (Tuple[float, float, float, float]): Weights for the different components of the loss.
+        loss_weights (Tuple[float, float, float, float]): loss_Weights for the different components of the loss.
         regularization (bool): Whether to include regularization loss.
         **library_kwargs: Additional keyword arguments for the SINDy library function.
 
@@ -168,7 +168,7 @@ def second_order_loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, f
     calculate_outputs_and_derivatives = calculate_outputs_and_derivatives_second_order_factory(autoencoder)
     sindy_library_fn = sindy_library_factory(**library_kwargs)
     
-    recon_weight, x_weight, z_weight, reg_weight = weights
+    recon_weight, x_weight, z_weight, reg_weight = loss_weights
 
     if not regularization:
         reg_weight = 0
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     )
 
     # Second-order dynamics test
-    loss_fn_second_order = second_order_loss_fn_factory(autoencoder, weights=(1, 1, 40, 1), regularization=True, **lib_kwargs)
+    loss_fn_second_order = second_order_loss_fn_factory(autoencoder, loss_weights=(1, 1, 40, 1), regularization=True, **lib_kwargs)
     loss_second_order, losses_second_order = loss_fn_second_order(state.params, (x, dx, ddx), state.mask)
     print("Second-order loss:", loss_second_order)
     print("Second-order loss components:", losses_second_order)

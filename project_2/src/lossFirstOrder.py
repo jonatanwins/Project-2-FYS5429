@@ -109,13 +109,13 @@ def calculate_outputs_and_derivatives_factory(autoencoder: nn.Module) -> Callabl
 
     return calculate_outputs_and_derivatives
 
-def first_order_loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, float] = (1, 1e-4, 0, 1e-5),  regularization: bool = True, **library_kwargs) -> Callable:
+def first_order_loss_fn_factory(autoencoder: nn.Module, loss_weights: Tuple[float, float, float, float] = (1, 1e-4, 0, 1e-5),  regularization: bool = True, **library_kwargs) -> Callable:
     """
     Factory function to create the first-order loss function.
 
     Args:
         autoencoder: Autoencoder module.
-        weights: Tuple of weights for different loss components.
+        loss_weights: Tuple of loss_weights for different loss components.
         regularization: Boolean indicating if regularization should be used.
         **library_kwargs: Additional arguments for the SINDy library.
 
@@ -126,7 +126,7 @@ def first_order_loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, fl
     calculate_output_and_derivatives = calculate_outputs_and_derivatives_factory(autoencoder)
     sindy_library_fn = sindy_library_factory(**library_kwargs)
     
-    recon_weight, x_weight, z_weight, reg_weight = weights
+    recon_weight, x_weight, z_weight, reg_weight = loss_weights
 
     if not regularization:
         reg_weight = 0
@@ -246,7 +246,7 @@ if __name__ == "__main__":
     )
 
     # First-order dynamics test
-    loss_fn_first_order = first_order_loss_fn_factory(autoencoder, weights=(1, 1, 40, 1), regularization=True, **lib_kwargs)
+    loss_fn_first_order = first_order_loss_fn_factory(autoencoder, loss_weights=(1, 1, 40, 1), regularization=True, **lib_kwargs)
     loss_first_order, losses_first_order = loss_fn_first_order(state.params, (x, dx), state.mask)
     print("First-order loss:", loss_first_order)
     print("First-order loss components:", losses_first_order)

@@ -132,7 +132,7 @@ class SINDy_trainer:
         self.coefficient_threshold = coefficient_threshold
         self.loss_params = {
             'autoencoder': None,  # Will be set after model initialization
-            'weights': loss_weights,
+            'loss_weights': loss_weights,
             'regularization': regularization,
             **self.library_hparams  # Merge library_hparams into loss_params
         }
@@ -425,7 +425,7 @@ class SINDy_trainer:
         return best_eval_metrics
 
 
-    def train_epoch(self, train_loader: jnp.ndarray, state: TrainState) -> Dict[str, Any]:
+    def train_epoch(self, train_loader: jnp.ndarray) -> Dict[str, Any]:
         """
         Train the model for one epoch using the training data loader.
 
@@ -437,7 +437,9 @@ class SINDy_trainer:
             metrics: Dictionary of aggregated metrics.
         """
         num_train_steps = len(train_loader)
-
+        state = self.state
+        
+        @jit
         def train_step_fn(carry, batch):
             state, metrics_sum = carry
             state, step_metrics = self.train_step(state, batch)
@@ -453,6 +455,9 @@ class SINDy_trainer:
 
         # Convert metrics_sum to a dictionary with .item() to convert JAX arrays to Python floats
         metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
+        
+        self.state = state
+
         return metrics
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:

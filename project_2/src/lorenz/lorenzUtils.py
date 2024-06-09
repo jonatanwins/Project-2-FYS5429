@@ -1,7 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from sindyLibrary import sindy_simulate, create_sindy_library
+import sys
+sys.path.append('..')
+from sindyLibrary import sindy_library_factory
+from sindySimulate import sindy_simulate
 from lorenzData import generate_lorenz_data
 from dev.loss_old import loss_dynamics_x_factory, loss_dynamics_z_factory, recon_loss_factory
 from jax import jit
@@ -27,11 +30,12 @@ def coordinate_transformation(xi, test_data):
     return z0_transformed, sindy_coefficients_transformed
 
 def simulate_ode(test_data, t, xi, xi_transformed=None, params=None):
-    z_sim = sindy_simulate(test_data['z'][0], t, xi, params['poly_order'], params['loss_params']['include_sine'])
+    lib_kwargs = {"poly_order": params['poly_order'], "include_sine": params['include_sine'], "n_states": params['input_dim']}
+    z_sim = sindy_simulate(test_data['z'][0], t, xi, **lib_kwargs)
 
     if xi_transformed is not None:
         z0_transformed, sindy_coefficients_transformed = coordinate_transformation(xi_transformed, test_data)
-        z_sim_transformed = sindy_simulate(z0_transformed, t, sindy_coefficients_transformed, params['poly_order'], params['loss_params']['include_sine'])
+        z_sim_transformed = sindy_simulate(z0_transformed, t, sindy_coefficients_transformed, **lib_kwargs)
         return z_sim, z_sim_transformed
 
     return z_sim
@@ -107,37 +111,7 @@ def create_out_of_distribution_initial_conditions(n_ics, inDist_ic_widths, outDi
     
     return test_data
 
-def calculate_losses(trainer, test_data, params):
-    recon_loss_fn = jit(recon_loss_factory())
-    loss_dynamics_x_fn = jit(loss_dynamics_x_factory(trainer.autoencoder.decoder))
-    loss_dynamics_z_fn = jit(loss_dynamics_z_factory(trainer.autoencoder.encoder))
 
-    x_hat = trainer.model.apply({"params": trainer.state.params}, test_data["x"])
-
-    decoder_x_error = recon_loss_fn(jnp.array(test_data["x"]), x_hat)
-
-    decoder_dx_error = loss_dynamics_x_fn(
-        trainer.state.params, 
-        test_data["z"], 
-        test_data["dx"], 
-        create_sindy_library(params["poly_order"], params["loss_params"]["include_sine"], n_states=params["latent_dim"])(test_data["z"]),
-        trainer.state.params["sindy_coefficients"], 
-        trainer.state.mask
-    )
-    sindy_dz_error = loss_dynamics_z_fn(
-        trainer.state.params, 
-        test_data["x"], 
-        test_data["dx"], 
-        create_sindy_library(params["poly_order"], params["loss_params"]["include_sine"], n_states=params["latent_dim"])(test_data["z"]),
-        trainer.state.params["sindy_coefficients"], 
-        trainer.state.mask
-    )
-
-    print("Decoder relative error: %f" % decoder_x_error)
-    print("Decoder relative SINDy error: %f" % decoder_dx_error)
-    print("SINDy relative error, z: %f" % sindy_dz_error)
-
-    return decoder_x_error, decoder_dx_error, sindy_dz_error
 if __name__ == "__main__":
     from trainer import SINDy_trainer
     import json
@@ -170,6 +144,3 @@ if __name__ == "__main__":
 
     # Plot the single trajectory
     plot_single_trajectory(t, z_sim, test_data=test_data)
-
-    # Calculate losses
-    calculate_losses(trainer, test_data, hparams)

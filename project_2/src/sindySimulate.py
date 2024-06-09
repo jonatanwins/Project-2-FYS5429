@@ -1,5 +1,6 @@
 from sindyLibrary import sindy_library_factory, polynomial_degrees
 import jax.numpy as jnp
+from jax import vmap
 from scipy.integrate import solve_ivp
 
 def sindy_simulate(x0, t, Xi, **library_kwargs):
