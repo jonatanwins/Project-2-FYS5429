@@ -24,7 +24,10 @@ import jax.numpy as jnp
 
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from loss_old import loss_fn_factory
+
+from lossFirstOrder import first_order_loss_fn_factory
+from lossSecondOrder import second_order_loss_fn_factory
+
 from sindyLibrary import library_size
 
 
@@ -91,6 +94,7 @@ class SINDy_trainer:
             check_val_every_n_epoch (int): Check validation every n epoch. Defaults to 500.
         """
         self.seed = seed
+        self.second_order = second_order
 
         ### Hyperparameters for autoencoder setup
         self.model_hparams = {
@@ -108,12 +112,11 @@ class SINDy_trainer:
             'include_sine': include_sine,
             'include_constant': include_constant
         }
-        # if second_order:
-        #     self.library_hparams['n_states'] = 2*latent_dim #if second order, we concat z and dz as the features for the library
-        # else:
-        #     self.library_hparams['n_states'] = latent_dim
-        ## ^ THIS BLOCK NEEDS TO BE COMMENTED OUT WHEN SECOND ORDER LOSS WORKS!
-        self.library_hparams['n_states'] = latent_dim # <--- THIS LINE NEEDS TO BE UNCOMMENTED WHEN SECOND ORDER LOSS WORKS!    
+        if second_order:
+            self.library_hparams['n_states'] = 2*latent_dim #if second order, we concat z and dz as the features for the library
+        else:
+            self.library_hparams['n_states'] = latent_dim
+       
 
         ### Setting up library size for the model parameters
         lib_size = library_size(**self.library_hparams)
@@ -131,7 +134,6 @@ class SINDy_trainer:
             'autoencoder': None,  # Will be set after model initialization
             'weights': loss_weights,
             'regularization': regularization,
-            'second_order': second_order,
             **self.library_hparams  # Merge library_hparams into loss_params
         }
         self.logger_params = logger_params
@@ -142,7 +144,9 @@ class SINDy_trainer:
             **self.loss_params,
             'optimizer_hparams': optimizer_hparams,
             'update_mask_every_n_epoch': update_mask_every_n_epoch,
-            'coefficient_threshold': coefficient_threshold
+            'coefficient_threshold': coefficient_threshold,
+            'second_order': second_order,
+            'seed': seed,
         }
 
         ### Define the autoencoder model
@@ -152,7 +156,10 @@ class SINDy_trainer:
 
         ### Define the loss function from the factory
         self.loss_params['autoencoder'] = self.model  # Set autoencoder in loss_params
-        self.loss_fn = loss_fn_factory(**self.loss_params)
+        if second_order:
+            self.loss_fn = second_order_loss_fn_factory(**self.loss_params)
+        else:
+            self.loss_fn = first_order_loss_fn_factory(**self.loss_params)
         
         self.create_jitted_functions()
 
@@ -384,7 +391,12 @@ class SINDy_trainer:
         print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")
         new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
         new_loss_params['regularization'] = False  # Update the copy with regularization=False
-        self.loss_fn = loss_fn_factory(**new_loss_params)  # Create the new loss function
+        
+        if self.second_order:
+            self.loss_fn = second_order_loss_fn_factory(**new_loss_params)
+        else:
+            self.loss_fn = first_order_loss_fn_factory(**new_loss_params)
+    
         self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
 
         #### Final training loop
@@ -413,21 +425,34 @@ class SINDy_trainer:
         return best_eval_metrics
 
 
-    def train_epoch(self, train_loader: Iterator) -> Dict[str, Any]:
+    def train_epoch(self, train_loader: jnp.ndarray, state: TrainState) -> Dict[str, Any]:
         """
-        Train the model for one epoch using the training data loader. Called from train_model.
+        Train the model for one epoch using the training data loader.
 
         Args:
-            train_loader (Iterator): Training data loader
+            train_loader (jnp.ndarray): Training data loader in the form of JAX batches.
+            state: The current state of the model.
 
+        Returns:
+            metrics: Dictionary of aggregated metrics.
         """
-        metrics = defaultdict(float)
         num_train_steps = len(train_loader)
-        for batch in train_loader:
-            self.state, step_metrics = self.train_step(self.state, batch)
-            for key in step_metrics:
-                metrics["train/" + key] += step_metrics[key] / num_train_steps
-        metrics = {key: metrics[key].item() for key in metrics}
+
+        def train_step_fn(carry, batch):
+            state, metrics_sum = carry
+            state, step_metrics = self.train_step(state, batch)
+            metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] / num_train_steps
+                           for key in step_metrics}
+            return (state, metrics_sum), step_metrics
+
+        # Initialize metrics_sum to store the sum of metrics
+        metrics_sum = {key: 0.0 for key in self.train_step(state, train_loader[0])[1]}
+
+        # Use jax.lax.scan to iterate over the training batches
+        (state, metrics_sum), _ = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader)
+
+        # Convert metrics_sum to a dictionary with .item() to convert JAX arrays to Python floats
+        metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
         return metrics
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:

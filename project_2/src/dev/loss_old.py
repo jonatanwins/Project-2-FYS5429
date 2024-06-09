@@ -114,9 +114,9 @@ def loss_dynamics_z_factory(encoder: nn.Module):
         """
         #jacrev of encoder with respect to x
         dphi_dx = jacrev(phi, argnums=1)
-        #dx from data in z space 
-        print(dphi_dx(params, x).shape)
-        print(dx_dt.shape)
+        # #dx from data in z space 
+        # print(dphi_dx(params, x).shape)
+        # print(dx_dt.shape)
         dx_in_z = dphi_dx(params, x) @ dx_dt
 
         return (dx_in_z - theta @ (mask * xi)) ** 2 #dx_in_z - sindy prediction for dz
@@ -192,8 +192,8 @@ def loss_dynamics_x_second_order_factory(decoder: nn.Module, encoder: nn.Module)
         # Compute the Jacobian of the encoder with respect to x
         dphi_dx = jacrev(phi, argnums=1)
         dphi_dx_val = dphi_dx(encoder_params, x)
-        print(dphi_dx_val.shape)
-        print(dx.shape)
+        # print(dphi_dx_val.shape)
+        # print(dx.shape)
         # Transform dx from x-space to z-space
         dx_in_z = dphi_dx_val @ dx
 

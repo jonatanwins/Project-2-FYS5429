@@ -13,6 +13,9 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.special import legendre
 from torch.utils.data import Dataset
+import jax.numpy as jnp
+from jax import jit
+import jax
 
 def lorenz(t, z, sigma=10, beta=8/3, rho=28):
     x, y, z = z
@@ -234,35 +237,110 @@ def lorenz_coefficients(normalization, poly_order=3, sigma=10.0, beta=8 / 3, rho
     return Xi
 
 
-from torch.utils.data import Dataset
 
-class LorenzDataset(Dataset):
+def create_jax_batches(data, batch_size):
     """
-    PyTorch dataset for the Lorenz dataset.
+    Convert Lorenz data to JAX arrays and create batches.
 
     Arguments:
-        data - Dictionary containing the Lorenz dataset.
+        batch_size - Size of each batch.
+        data - Dictionary containing 'x' and 'dx' arrays.
+
+    Returns:
+        batches - List of tuples. Each tuple contains a batch of 'x' and 'dx' arrays.
     """
+    x = jnp.array(data['x'])
+    dx = jnp.array(data['dx'])
+    
+    # Calculate the number of batches
+    num_samples = x.shape[0]
+    num_batches = num_samples // batch_size
 
-    def __init__(self, data):
-        self.x = data["x"]
-        self.dx = data["dx"]
+    # Create the batches
+    batches = []
+    for i in range(num_batches):
+        x_batch = x[i * batch_size: (i + 1) * batch_size]
+        dx_batch = dx[i * batch_size: (i + 1) * batch_size]
+        batches.append((x_batch, dx_batch))
+    
+    # # Handle the remaining samples if any
+    # if num_samples % batch_size != 0:
+    #     x_batch = x[num_batches * batch_size:]
+    #     dx_batch = dx[num_batches * batch_size:]
+    #     batches.append((x_batch, dx_batch))
 
-    def __len__(self):
-        return self.x.shape[0]
+    return jnp.array(batches)
 
-    def __getitem__(self, idx):
-        return self.x[idx], self.dx[idx]
+@jit
+def shuffle_jax_batches(jax_batches, rng_key):
+    """
+    Shuffle the JAX batches while keeping the (x, dx) pairs intact.
 
+    Arguments:
+        jax_batches - JAX array of shape (num_batches, 2, batch_size, input_dim).
+        rng_key - JAX random key for shuffling.
+
+    Returns:
+        shuffled_batches - JAX array of shuffled batches.
+    """
+    # Separate x and dx from the batches
+    x_batches = jax_batches[:, 0]
+    dx_batches = jax_batches[:, 1]
+    
+    # Concatenate all batches
+    x_all = jnp.concatenate(x_batches, axis=0)
+    dx_all = jnp.concatenate(dx_batches, axis=0)
+    
+    # Get the number of samples and batch size
+    num_samples = x_all.shape[0]
+    batch_size = x_batches.shape[1]
+    
+    # Generate a random permutation of indices
+    perm = jax.random.permutation(rng_key, num_samples)
+    
+    # Shuffle the arrays
+    x_shuffled = x_all[perm]
+    dx_shuffled = dx_all[perm]
+    
+    # Calculate the number of full batches
+    num_batches = num_samples // batch_size
+    
+    # Select only the samples that fit into full batches
+    x_shuffled = x_shuffled[:num_batches * batch_size]
+    dx_shuffled = dx_shuffled[:num_batches * batch_size]
+    
+    # Split the arrays into batches
+    x_batches = jnp.reshape(x_shuffled, (num_batches, batch_size, -1))
+    dx_batches = jnp.reshape(dx_shuffled, (num_batches, batch_size, -1))
+    
+    # Stack the x and dx batches together
+    shuffled_batches = jnp.stack((x_batches, dx_batches), axis=1)
+    
+    return shuffled_batches
+
+# Test the function
 if __name__ == "__main__":
-    # Test the get_lorenz_train_data function
+    # Generate the training data
     training_data = get_lorenz_train_data(2)
     print("Training Data Keys:", training_data.keys())
     print(f"x shape: {training_data['x'].shape}, dx shape: {training_data['dx'].shape}")
-    
-    # Test the get_lorenz_test_data function
-    test_data = get_lorenz_test_data(2)
-    print("Test Data Keys:", test_data.keys())
-    print(f"x shape: {test_data['x'].shape}, dx shape: {test_data['dx'].shape}")
 
-    print(f"z shape: {test_data['z'].shape};  dz shape: {test_data['dz'].shape}")
+    # Specify the batch size
+    batch_size = 32
+
+    # Create JAX batches
+    jax_batches = create_jax_batches(batch_size, training_data)
+
+    # Print some information about the batches
+    print(f"Number of batches: {jax_batches.shape[0]}")
+    print(f"Shape of the first batch x: {jax_batches[0][0].shape}, dx: {jax_batches[0][1].shape}")
+    print(jax_batches.shape) 
+
+    # Create a random key
+    rng_key = jax.random.PRNGKey(42)
+
+    # Shuffle the batches and print some information
+    shuffled_batches = shuffle_jax_batches(jax_batches, rng_key)
+    print(f"Number of shuffled batches: {shuffled_batches.shape[0]}")
+    print(f"Shape of the first shuffled batch x: {shuffled_batches[0][0].shape}, dx: {shuffled_batches[0][1].shape}")
+    print(shuffled_batches.shape) 

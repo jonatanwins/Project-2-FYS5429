@@ -84,33 +84,111 @@ def wrap_to_pi(z):
     return z_mod + subtract_m
 
 
+
+
+import jax
+import jax.numpy as jnp
+from jax import jit
+from typing import Dict, Tuple
+
+def create_jax_batches(batch_size: int, data: Dict[str, jnp.ndarray]) -> jnp.ndarray:
+    """
+    Convert Pendulum data to JAX arrays and create batches.
+
+    Arguments:
+        batch_size - Size of each batch.
+        data - Dictionary containing 'x' and 'dx' arrays.
+
+    Returns:
+        batches - JAX array of shape (num_batches, 2, batch_size, input_dim).
+    """
+    x = jnp.array(data['x'])
+    dx = jnp.array(data['dx'])
+    
+    # Calculate the number of batches
+    num_samples = x.shape[0]
+    num_batches = num_samples // batch_size
+
+    # Create the batches
+    x_batches = jnp.reshape(x[:num_batches * batch_size], (num_batches, batch_size, -1))
+    dx_batches = jnp.reshape(dx[:num_batches * batch_size], (num_batches, batch_size, -1))
+    
+    # Stack the x and dx batches together
+    batches = jnp.stack((x_batches, dx_batches), axis=1)
+
+    return batches
+
+@jit
+def shuffle_jax_batches(jax_batches: jnp.ndarray, rng_key: jax.random.PRNGKey) -> jnp.ndarray:
+    """
+    Shuffle the JAX batches while keeping the (x, dx) pairs intact.
+
+    Arguments:
+        jax_batches - JAX array of shape (num_batches, 2, batch_size, input_dim).
+        rng_key - JAX random key for shuffling.
+
+    Returns:
+        shuffled_batches - JAX array of shuffled batches.
+    """
+    # Separate x and dx from the batches
+    x_batches = jax_batches[:, 0]
+    dx_batches = jax_batches[:, 1]
+    
+    # Concatenate all batches
+    x_all = jnp.concatenate(x_batches, axis=0)
+    dx_all = jnp.concatenate(dx_batches, axis=0)
+    
+    # Get the number of samples and batch size
+    num_samples = x_all.shape[0]
+    batch_size = x_batches.shape[1]
+    
+    # Generate a random permutation of indices
+    perm = jax.random.permutation(rng_key, num_samples)
+    
+    # Shuffle the arrays
+    x_shuffled = x_all[perm]
+    dx_shuffled = dx_all[perm]
+    
+    # Calculate the number of full batches
+    num_batches = num_samples // batch_size
+    
+    # Select only the samples that fit into full batches
+    x_shuffled = x_shuffled[:num_batches * batch_size]
+    dx_shuffled = dx_shuffled[:num_batches * batch_size]
+    
+    # Split the arrays into batches
+    x_batches = jnp.reshape(x_shuffled, (num_batches, batch_size, -1))
+    dx_batches = jnp.reshape(dx_shuffled, (num_batches, batch_size, -1))
+    
+    # Stack the x and dx batches together
+    shuffled_batches = jnp.stack((x_batches, dx_batches), axis=1)
+    
+    return shuffled_batches
+
+# Test the functions
 if __name__ == "__main__":
     # Number of initial conditions
     n_ics = 5
 
-    # Generate pendulum data
-    data = get_pendulum_data(n_ics)
+    # Generate pendulum training data
     training_data = get_pendulum_training_data(n_ics)
 
-    # Print shapes of the generated data to verify correctness
-    print("Shapes of generated pendulum data:")
-    print(f"t shape: {data['t'].shape}")
-    print(f"x shape: {data['x'].shape}")
-    print(f"dx shape: {data['dx'].shape}")
-    print(f"ddx shape: {data['ddx'].shape}")
-    print(f"z shape: {data['z'].shape}")
-    print(f"dz shape: {data['dz'].shape}")
+    # Specify the batch size
+    batch_size = 32
 
-    print("\nShapes of generated pendulum training data:")
-    print(f"x shape: {training_data['x'].shape}")
-    print(f"dx shape: {training_data['dx'].shape}")
-    print(f"ddx shape: {training_data['ddx'].shape}")
+    # Create JAX batches
+    jax_batches = create_jax_batches(batch_size, training_data)
+    print(f"Number of batches: {jax_batches.shape[0]}")
+    print(f"Shape of the first batch x: {jax_batches[0][0].shape}, dx: {jax_batches[0][1].shape}")
+    print(jax_batches.shape) # <- this is the input
 
-    # Optionally, print some of the actual data to inspect values
-    print("\nSample of generated pendulum data:")
-    print(f"t: {data['t'][:5]}")  # Print first 5 time steps
-    print(f"x: {data['x'][:5]}")  # Print first 5 x values
-    print(f"dx: {data['dx'][:5]}")  # Print first 5 dx values
-    print(f"ddx: {data['ddx'][:5]}")  # Print first 5 ddx values
-    print(f"z: {data['z'][:5]}")  # Print first 5 z values
-    print(f"dz: {data['dz'][:5]}")  # Print first 5 dz values
+    # Create a random key
+    rng_key = jax.random.PRNGKey(42)
+
+    # Shuffle the batches and print some information
+    shuffled_batches = shuffle_jax_batches(jax_batches, rng_key)
+    print(f"Number of shuffled batches: {shuffled_batches.shape[0]}")
+    print(f"Shape of the first shuffled batch x: {shuffled_batches[0][0].shape}, dx: {shuffled_batches[0][1].shape}")
+    print(shuffled_batches.shape) # <- this is the output
+
+

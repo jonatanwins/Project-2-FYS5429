@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from sindyLibrary import sindy_simulate, create_sindy_library
 from lorenzData import generate_lorenz_data
-from loss_old import loss_dynamics_x_factory, loss_dynamics_z_factory, recon_loss_factory
+from dev.loss_old import loss_dynamics_x_factory, loss_dynamics_z_factory, recon_loss_factory
 from jax import jit
 import jax.numpy as jnp
 
