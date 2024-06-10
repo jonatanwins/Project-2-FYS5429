@@ -406,6 +406,9 @@ class SINDy_trainer:
         #### Final training loop
         print(f"Beginning final training loop.")
         for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
+            #shuffle train loader, does not work for pytorch dataloader!!
+
+
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
             train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
 
