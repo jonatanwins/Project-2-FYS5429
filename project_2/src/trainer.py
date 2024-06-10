@@ -363,6 +363,7 @@ class SINDy_trainer:
         """
         ### Initialize the logger
         self.init_logger(self.logger_params)
+        self.create_train_epoch(train_loader)
 
         ### Initialize the optimizer
         self.init_optimizer(num_epochs + final_epochs, len(train_loader))
@@ -370,8 +371,10 @@ class SINDy_trainer:
 
         #### Initial training loop
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-            starting = time.time()
-            train_metrics = self.train_epoch(train_loader)
+            
+            self.state, metrics_sum = self.train_epoch(self.state, train_loader)
+            train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
+
             self.logger.log_metrics(train_metrics, step=epoch_idx)
 
             if epoch_idx % self.check_val_every_n_epoch == 0:
@@ -402,7 +405,9 @@ class SINDy_trainer:
         #### Final training loop
         print(f"Beginning final training loop.")
         for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
-            train_metrics = self.train_epoch(train_loader)
+            self.state, metrics_sum = self.train_epoch(self.state, train_loader)
+            train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
+
             overall_epoch_idx = epoch_idx + num_epochs  
             self.logger.log_metrics(train_metrics, step=overall_epoch_idx)
 
@@ -424,8 +429,25 @@ class SINDy_trainer:
         
         return best_eval_metrics
 
+    def create_train_epoch(self, train_loader):
 
-    def train_epoch(self, train_loader: jnp.ndarray) -> Dict[str, Any]:
+        num_train_steps = len(train_loader)
+        @jit
+        def train_step_fn(carry, batch):
+            state, metrics_sum = carry
+            state, step_metrics = self.train_step(state, batch)
+            metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] / num_train_steps
+                           for key in step_metrics}
+            return (state, metrics_sum), step_metrics
+        
+        def train_epoch(state, train_loader):
+            metrics_sum = {key: 0.0 for key in self.train_step(state, train_loader[0])[1]}
+            (state, metrics_sum), _ = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader, num_train_steps)
+            return state, metrics_sum
+        
+        self.train_epoch = jit(train_epoch)
+        
+    def train_epoch_old(self, train_loader: jnp.ndarray) -> Dict[str, Any]:
         """
         Train the model for one epoch using the training data loader.
 
