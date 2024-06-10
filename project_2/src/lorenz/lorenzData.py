@@ -70,6 +70,12 @@ def generate_lorenz_data(
         high-dimensional dataset (x, along with 1st derivatives dx), and
         the true Lorenz coefficient matrix for SINDy.
     """
+    ###lib kwargs for true coefficients
+    poly_order = 3
+    include_sine = False
+    include_constant = True
+
+    lib_kwargs = {'poly_order': poly_order, 'include_sine': include_sine, 'include_constant': include_constant}
 
     n_ics = ics.shape[0]
     n_steps = t.size
@@ -128,11 +134,11 @@ def generate_lorenz_data(
 
     if normalization is None:
         sindy_coefficients = lorenz_coefficients(
-            [1, 1, 1], sigma=sigma, beta=beta, rho=rho
+            [1, 1, 1], sigma=sigma, beta=beta, rho=rho, **lib_kwargs
         )
     else:
         sindy_coefficients = lorenz_coefficients(
-            normalization, sigma=sigma, beta=beta, rho=rho
+            normalization, sigma=sigma, beta=beta, rho=rho, **lib_kwargs
         )
 
     data = {}
@@ -177,7 +183,7 @@ def get_lorenz_data(n_ics, noise_strength=0, test_data=False):
     x = data["x"].reshape((-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
     dx = data["dx"].reshape((-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
 
-    return x, dx, t
+    return {"x": x, "dx": dx, "t": t}
 
 
 def out_of_distro_ics(n_ics, inDist_ic_widths=np.array([36, 48, 41]), outDist_extra_width=np.array([10, 10, 10]), ic_means=np.array([0, 0, 25])):
@@ -242,7 +248,7 @@ def get_lorenz_OutOfDistro_data(n_ics, noise_strength=0, inDist_ic_widths=np.arr
     x = data["x"].reshape((-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
     dx = data["dx"].reshape((-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
 
-    return x, dx, t
+    return {"x": x, "dx": dx, "t": t}
 
 
 def lorenz_coefficients(normalization=(1,1,1), sigma=10.0, beta=8 / 3, rho=28.0, **library_kwargs):
@@ -357,7 +363,7 @@ if __name__ == "__main__":
     batch_size = 32
 
     # Create JAX batches
-    jax_batches = create_jax_batches(batch_size, training_data)
+    jax_batches = create_jax_batches(training_data, batch_size)
 
     # Print some information about the batches
     print(f"Number of batches: {jax_batches.shape[0]}")

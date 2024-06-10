@@ -433,7 +433,7 @@ class SINDy_trainer:
             self.save_metrics('test', out_dist_metrics)
         
         self.logger.finalize("success")
-        
+        self.xi = self.state.params["sindy_coefficients"]*self.state.mask # Save the coefficients as xi for easy access
         return best_eval_metrics
 
     def train_epoch_factory(self, train_loader):

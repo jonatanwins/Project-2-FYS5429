@@ -1,7 +1,6 @@
 {
     "input_dim": 128,
     "latent_dim": 3,
-    "poly_order": 3,
     "widths": [
         64,
         32
@@ -9,20 +8,24 @@
     "activation": "sigmoid",
     "weight_initializer": "xavier_uniform",
     "bias_initializer": "zeros",
+    "lib_size": 20,
+    "autoencoder": null,
+    "loss_weights": [
+        1,
+        0.0001,
+        0,
+        1e-05
+    ],
+    "regularization": true,
+    "poly_order": 3,
+    "include_sine": false,
+    "include_constant": true,
+    "n_states": 3,
     "optimizer_hparams": {
         "optimizer": "adam"
     },
-    "loss_params": {
-        "latent_dim": 3,
-        "poly_order": 3,
-        "include_sine": false,
-        "weights": [
-            1,
-            0.0001,
-            1e-06,
-            1e-05
-        ]
-    },
     "update_mask_every_n_epoch": 500,
-    "coefficient_threshold": 0.1
+    "coefficient_threshold": 0.1,
+    "second_order": false,
+    "seed": 69
 }
