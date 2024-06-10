@@ -30,6 +30,7 @@ from lossSecondOrder import second_order_loss_fn_factory
 
 from sindyLibrary import library_size
 
+from data_utils import shuffle_jax_batches_factory
 
 class TrainState(train_state.TrainState):
     mask: jnp.ndarray = None
@@ -95,6 +96,8 @@ class SINDy_trainer:
         """
         self.seed = seed
         self.second_order = second_order
+
+        self.shuffle_fn = shuffle_jax_batches_factory(second_order=second_order)
 
         ### Hyperparameters for autoencoder setup
         self.model_hparams = {
@@ -372,7 +375,10 @@ class SINDy_trainer:
 
         #### Initial training loop
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-            
+
+            ### Shuffle the train loader
+            train_loader = self.shuffle_fn(train_loader)
+
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
             train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
 
@@ -407,7 +413,7 @@ class SINDy_trainer:
         print(f"Beginning final training loop.")
         for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
             #shuffle train loader, does not work for pytorch dataloader!!
-
+            train_loader = self.shuffle_fn(train_loader)
 
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
             train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}

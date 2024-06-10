@@ -193,7 +193,6 @@ def first_order_loss_fn_factory(autoencoder: nn.Module, loss_weights: Tuple[floa
     
     return first_order_loss_fn
 
-
 if __name__ == "__main__":
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
@@ -256,3 +255,19 @@ if __name__ == "__main__":
     loss_first_order_jit, losses_first_order_jit = jitted_loss_fn_first_order(state.params, (x, dx), state.mask)
     print("Jitted first-order loss:", loss_first_order_jit)
     print("Jitted first-order loss components:", losses_first_order_jit)
+
+    # Additional test points with varying data shapes
+    for batch_size in [20, 50, 100]:
+        key, subkey = random.split(key)
+        x = random.normal(subkey, (batch_size, input_dim))
+        key, subkey = random.split(key)
+        dx = random.normal(subkey, (batch_size, input_dim))
+
+        loss_first_order, losses_first_order = loss_fn_first_order(state.params, (x, dx), state.mask)
+        print(f"First-order loss for batch size {batch_size}:", loss_first_order)
+        print(f"First-order loss components for batch size {batch_size}:", losses_first_order)
+
+        # Jitted test for each batch size
+        loss_first_order_jit, losses_first_order_jit = jitted_loss_fn_first_order(state.params, (x, dx), state.mask)
+        print(f"Jitted first-order loss for batch size {batch_size}:", loss_first_order_jit)
+        print(f"Jitted first-order loss components for batch size {batch_size}:", losses_first_order_jit)

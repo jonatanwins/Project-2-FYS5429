@@ -289,7 +289,7 @@ def loss_dynamics_z_second_order_factory(encoder: nn.Module):
     return loss_dynamics_z_second_order
 
 
-def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False, **library_kwargs) -> Callable:
+def loss_fn_factory(autoencoder: nn.Module, loss_weights: Tuple[float, float, float, float] = (1, 1, 40, 1), regularization: bool = True, second_order: bool = False, **library_kwargs) -> Callable:
     """
     Create a loss function for different SINDy libraries.
 
@@ -305,8 +305,9 @@ def loss_fn_factory(autoencoder: nn.Module, weights: Tuple[float, float, float, 
     Returns:
         Callable: Loss function.
     """
+    
     sindy_library = sindy_library_factory(**library_kwargs)
-    recon_weight, x_weight, z_weight, reg_weight = weights
+    recon_weight, x_weight, z_weight, reg_weight = loss_weights
 
     # Unpacking autoencoder
     encoder = autoencoder.encoder
@@ -372,21 +373,21 @@ if __name__ == "__main__":
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
     from sindyLibrary import library_size
-    from jax import random
+    from jax import random, jit
     import optax
 
     key = random.PRNGKey(0)
     input_dim = 128
-
     latent_dim = 3
     poly_order = 3
     include_sine = False
     include_constant = True
 
+    # Configure SINDy library
     lib_kwargs = {'n_states': latent_dim, 'poly_order': poly_order, 'include_sine': include_sine, 'include_constant': include_constant}
-
     lib_size = library_size(**lib_kwargs)
 
+    # Define the autoencoder
     encoder = Encoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
     decoder = Decoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32])
     autoencoder = Autoencoder(input_dim=input_dim, latent_dim=latent_dim, widths=[32, 32], encoder=encoder, decoder=decoder, lib_size=lib_size)
@@ -394,10 +395,8 @@ if __name__ == "__main__":
     # Create some random data
     key, subkey = random.split(key)
     x = random.normal(subkey, (10, input_dim))
-
     key, subkey = random.split(key)
     dx = random.normal(subkey, (10, input_dim))
-    ddx = random.normal(subkey, (10, input_dim))
 
     variables = autoencoder.init(subkey, x)
 
@@ -421,9 +420,30 @@ if __name__ == "__main__":
         mask=state.mask
     )
 
-    loss_fn = loss_fn_factory(autoencoder, weights=(1, 1, 40, 1), second_order=False, **lib_kwargs)
+    # First-order dynamics test
+    loss_fn_first_order = loss_fn_factory(autoencoder, loss_weights=(1, 1, 40, 1), regularization=True, **lib_kwargs)
+    loss_first_order, losses_first_order = loss_fn_first_order(state.params, (x, dx), state.mask)
+    print("First-order loss:", loss_first_order)
+    print("First-order loss components:", losses_first_order)
 
-    loss, losses = loss_fn(state.params, (x, dx), state.mask)
-    print(loss)
-    print(losses)
-    print(loss.shape)
+    # Jitted first-order dynamics test
+    jitted_loss_fn_first_order = jit(loss_fn_first_order)
+    loss_first_order_jit, losses_first_order_jit = jitted_loss_fn_first_order(state.params, (x, dx), state.mask)
+    print("Jitted first-order loss:", loss_first_order_jit)
+    print("Jitted first-order loss components:", losses_first_order_jit)
+
+    # Additional test points with varying data shapes
+    for batch_size in [20, 50, 100]:
+        key, subkey = random.split(key)
+        x = random.normal(subkey, (batch_size, input_dim))
+        key, subkey = random.split(key)
+        dx = random.normal(subkey, (batch_size, input_dim))
+
+        loss_first_order, losses_first_order = loss_fn_first_order(state.params, (x, dx), state.mask)
+        print(f"First-order loss for batch size {batch_size}:", loss_first_order)
+        print(f"First-order loss components for batch size {batch_size}:", losses_first_order)
+
+        # Jitted test for each batch size
+        loss_first_order_jit, losses_first_order_jit = jitted_loss_fn_first_order(state.params, (x, dx), state.mask)
+        print(f"Jitted first-order loss for batch size {batch_size}:", loss_first_order_jit)
+        print(f"Jitted first-order loss components for batch size {batch_size}:", losses_first_order_jit)
