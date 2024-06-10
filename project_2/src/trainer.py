@@ -363,7 +363,7 @@ class SINDy_trainer:
         """
         ### Initialize the logger
         self.init_logger(self.logger_params)
-        self.create_train_epoch(train_loader)
+        self.train_epoch_factory(train_loader)
 
         ### Initialize the optimizer
         self.init_optimizer(num_epochs + final_epochs, len(train_loader))
@@ -429,7 +429,7 @@ class SINDy_trainer:
         
         return best_eval_metrics
 
-    def create_train_epoch(self, train_loader):
+    def train_epoch_factory(self, train_loader):
 
         num_train_steps = len(train_loader)
         @jit
@@ -446,41 +446,8 @@ class SINDy_trainer:
             return state, metrics_sum
         
         self.train_epoch = jit(train_epoch)
-        
-    def train_epoch_old(self, train_loader: jnp.ndarray) -> Dict[str, Any]:
-        """
-        Train the model for one epoch using the training data loader.
+        return         
 
-        Args:
-            train_loader (jnp.ndarray): Training data loader in the form of JAX batches.
-            state: The current state of the model.
-
-        Returns:
-            metrics: Dictionary of aggregated metrics.
-        """
-        num_train_steps = len(train_loader)
-        state = self.state
-        
-        @jit
-        def train_step_fn(carry, batch):
-            state, metrics_sum = carry
-            state, step_metrics = self.train_step(state, batch)
-            metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] / num_train_steps
-                           for key in step_metrics}
-            return (state, metrics_sum), step_metrics
-
-        # Initialize metrics_sum to store the sum of metrics
-        metrics_sum = {key: 0.0 for key in self.train_step(state, train_loader[0])[1]}
-
-        # Use jax.lax.scan to iterate over the training batches
-        (state, metrics_sum), _ = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader)
-
-        # Convert metrics_sum to a dictionary with .item() to convert JAX arrays to Python floats
-        metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
-        
-        self.state = state
-
-        return metrics
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:
         """
