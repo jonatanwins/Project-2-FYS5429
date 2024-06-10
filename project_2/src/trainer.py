@@ -458,11 +458,11 @@ class SINDy_trainer:
             state, metrics_sum = carry
             new_state, step_metrics = self.train_step(state, batch)
             metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] for key in step_metrics}
-            return (new_state, metrics_sum)
+            return (new_state, metrics_sum), None
 
         def train_epoch(state, train_loader):
             metrics_sum = {key: 0.0 for key in self.train_step(state, train_loader[0])[1]}
-            state, metrics_sum = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader)
+            (state, metrics_sum), _ = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader)
             # Normalize the metrics after the scan
             metrics_avg = {key: value / num_train_steps for key, value in metrics_sum.items()}
             return state, metrics_avg
