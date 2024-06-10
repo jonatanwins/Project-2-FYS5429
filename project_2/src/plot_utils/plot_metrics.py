@@ -82,7 +82,7 @@ def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Opt
 if __name__ == "__main__":
     plt.style.use("plot_settings.mplstyle")
     # Example usage
-    log_dir = "../lorenz/checkpoints/version_0"
+    log_dir = "../lorenz/checkpoints/kathleenReplica_1"
     metrics = RunMetrics(log_dir)
 
     # Plot a single run
