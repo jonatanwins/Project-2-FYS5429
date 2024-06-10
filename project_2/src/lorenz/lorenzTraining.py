@@ -8,7 +8,7 @@ from scipy.special import legendre
 from jax.lib import xla_bridge
 
 sys.path.append('../')
-from lorenzData import get_lorenz_test_data, get_lorenz_train_data, create_jax_batches
+from lorenzData import get_lorenz_data, create_jax_batches
 from trainer import SINDy_trainer
 
 
@@ -32,11 +32,11 @@ if __name__ == "__main__":
     batch_size_training = 8000
     batch_size_validation = 5000
 
-    training_data = get_lorenz_train_data(n_ics_training, noise_strength)
+    training_data = get_lorenz_data(n_ics_training, noise_strength)
     train_loader = create_jax_batches(training_data, batch_size_training)
 
 
-    validation_data = get_lorenz_train_data(n_ics_validation, noise_strength)
+    validation_data = get_lorenz_data(n_ics_validation, noise_strength)
     validation_loader = create_jax_batches(validation_data, batch_size_validation)
 
     # Define hyperparameters
