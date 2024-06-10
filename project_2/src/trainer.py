@@ -348,6 +348,7 @@ class SINDy_trainer:
         self,
         train_loader: Iterator,
         val_loader: Iterator,
+        out_dist_loader: Optional[Iterator] = None,
         num_epochs: int = 5000,
         final_epochs: int = 500,
     ) -> Dict[str, Any]:
@@ -357,7 +358,7 @@ class SINDy_trainer:
         Args:
             train_loader (Iterator): Training data loader
             val_loader (Iterator): Validation data loader
-            test_loader (Optional[Iterator], optional): Test data loader. Defaults to None.
+            out_dist_loader (Optional[Iterator], optional): Out-of-distribution data loader. Defaults to None.
             num_epochs (int, optional): Number of epochs to train the model. Defaults to 500.
         
         """
@@ -424,6 +425,12 @@ class SINDy_trainer:
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
+
+        if out_dist_loader is not None:
+            self.load_model()
+            out_dist_metrics = self.eval_model(out_dist_loader, log_prefix='OutDist/')
+            self.logger.log_metrics(out_dist_metrics, step=epoch_idx)
+            self.save_metrics('test', out_dist_metrics)
         
         self.logger.finalize("success")
         
