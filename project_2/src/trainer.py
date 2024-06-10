@@ -369,15 +369,19 @@ class SINDy_trainer:
         self.init_logger(self.logger_params)
         self.train_epoch_factory(train_loader)
 
+        ### shuffle key
+        shuffle_key = random.PRNGKey(self.seed)
+
         ### Initialize the optimizer
         self.init_optimizer(num_epochs + final_epochs, len(train_loader))
         best_eval_metrics = None
 
         #### Initial training loop
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-
+            
+            shuffle_key, _ = random.split(shuffle_key)
             ### Shuffle the train loader
-            train_loader = self.shuffle_fn(train_loader)
+            train_loader = self.shuffle_fn(train_loader, shuffle_key)
 
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
             train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
@@ -413,7 +417,8 @@ class SINDy_trainer:
         print(f"Beginning final training loop.")
         for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
             #shuffle train loader, does not work for pytorch dataloader!!
-            train_loader = self.shuffle_fn(train_loader)
+            shuffle_key, _ = random.split(shuffle_key)
+            train_loader = self.shuffle_fn(train_loader, shuffle_key)
 
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
             train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
@@ -445,26 +450,28 @@ class SINDy_trainer:
         self.xi = self.state.params["sindy_coefficients"]*self.state.mask # Save the coefficients as xi for easy access
         return best_eval_metrics
 
-    def train_epoch_factory(self, train_loader):
 
+    def train_epoch_factory(self, train_loader):
         num_train_steps = len(train_loader)
-    
+
         def train_step_fn(carry, batch):
             state, metrics_sum = carry
             new_state, step_metrics = self.train_step(state, batch)
-            metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] / num_train_steps
-                           for key in step_metrics}
-            return (new_state, metrics_sum), step_metrics
-        
+            metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] for key in step_metrics}
+            return (new_state, metrics_sum)
+
         def train_epoch(state, train_loader):
             metrics_sum = {key: 0.0 for key in self.train_step(state, train_loader[0])[1]}
-            (state, metrics_sum), _ = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader, num_train_steps)
-            return state, metrics_sum
+            state, metrics_sum = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader)
+            # Normalize the metrics after the scan
+            metrics_avg = {key: value / num_train_steps for key, value in metrics_sum.items()}
+            return state, metrics_avg
+
         if self.debug:
             self.train_epoch = train_epoch
         else:
             self.train_epoch = jit(train_epoch)
-        return         
+            return         
 
 
     def eval_model(self, data_loader: Iterator, log_prefix: Optional[str] = "") -> Dict[str, Any]:

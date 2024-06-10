@@ -365,6 +365,8 @@ if __name__ == "__main__":
     # Create JAX batches
     jax_batches = create_jax_batches(training_data, batch_size)
 
+    print("length of jax_batches", len(jax_batches))
+
     # Print some information about the batches
     print(f"Number of batches: {jax_batches.shape[0]}")
     print(f"Shape of the first batch x: {jax_batches[0][0].shape}, dx: {jax_batches[0][1].shape}")
@@ -378,3 +380,4 @@ if __name__ == "__main__":
     print(f"Number of shuffled batches: {shuffled_batches.shape[0]}")
     print(f"Shape of the first shuffled batch x: {shuffled_batches[0][0].shape}, dx: {shuffled_batches[0][1].shape}")
     print(shuffled_batches.shape) 
+    print("length of shuffled_batches", len(shuffled_batches))
