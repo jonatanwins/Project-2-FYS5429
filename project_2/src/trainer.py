@@ -448,20 +448,22 @@ class SINDy_trainer:
     def train_epoch_factory(self, train_loader):
 
         num_train_steps = len(train_loader)
-        @jit
+    
         def train_step_fn(carry, batch):
             state, metrics_sum = carry
-            state, step_metrics = self.train_step(state, batch)
+            new_state, step_metrics = self.train_step(state, batch)
             metrics_sum = {key: metrics_sum.get(key, 0) + step_metrics[key] / num_train_steps
                            for key in step_metrics}
-            return (state, metrics_sum), step_metrics
+            return (new_state, metrics_sum), step_metrics
         
         def train_epoch(state, train_loader):
             metrics_sum = {key: 0.0 for key in self.train_step(state, train_loader[0])[1]}
             (state, metrics_sum), _ = jax.lax.scan(train_step_fn, (state, metrics_sum), train_loader, num_train_steps)
             return state, metrics_sum
-        
-        self.train_epoch = jit(train_epoch)
+        if self.debug:
+            self.train_epoch = train_epoch
+        else:
+            self.train_epoch = jit(train_epoch)
         return         
 
 
