@@ -318,7 +318,6 @@ class SINDy_trainer:
 
         #### Initial training loop
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-            starting = time.time()
             train_metrics = self.train_epoch(train_loader)
             self.logger.log_metrics(train_metrics, step=epoch_idx)
 
@@ -331,8 +330,7 @@ class SINDy_trainer:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-            ending = time.time()
-            print(f"Time of epoch {epoch_idx}: {ending - starting}")
+
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
@@ -378,14 +376,13 @@ class SINDy_trainer:
         """
         metrics = defaultdict(float)
         num_train_steps = len(train_loader)
-        start_time = time.time()
+
         for batch in train_loader:
             #print("training batch")
             self.state, step_metrics = self.train_step(self.state, batch)
             for key in step_metrics:
                 metrics["train/" + key] += step_metrics[key] / num_train_steps
         metrics = {key: metrics[key].item() for key in metrics}
-        print(f"Inner training loop time: {time.time() - start_time}")
         #metrics["epoch_time"] = time.time() - start_time
         return metrics
 
