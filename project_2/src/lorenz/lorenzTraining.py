@@ -3,7 +3,7 @@ import sys
 from jax.lib import xla_bridge
 
 sys.path.append('../')
-from lorenzData import get_lorenz_data
+from lorenzData import get_lorenz_data, get_lorenz_OutOfDistro_data
 
 from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
@@ -25,17 +25,23 @@ if __name__ == "__main__":
     # Set up training and validation data sets as arrays
     n_ics_training = 2048
     n_ics_validation = 20
+    n_ics_testing = 100
 
     noise_strength = 1e-6
     batch_size_training = 8000
     batch_size_validation = 5000
+    batch_size_testing = 5000
 
     training_data = get_lorenz_data(n_ics_training, noise_strength)
     train_loader = create_jax_batches(training_data, batch_size_training)
 
 
-    validation_data = get_lorenz_data(n_ics_validation, noise_strength)
+    validation_data = get_lorenz_data(n_ics_validation) #no noise for val data
     validation_loader = create_jax_batches(validation_data, batch_size_validation)
+
+    out_dist_testing_data = get_lorenz_OutOfDistro_data(n_ics_testing) #no noise for testing
+    out_dist_testing_loader = create_jax_batches(out_dist_testing_data, batch_size_testing)
+
 
     # Define hyperparameters
     input_dim = 128
@@ -84,4 +90,4 @@ if __name__ == "__main__":
     # Initialize trainer
     trainer = SINDy_trainer(**params)
 
-    trainer.train_model(train_loader, validation_loader, num_epochs=10001, final_epochs=1001)
+    trainer.train_model(train_loader, validation_loader, out_dist_testing_loader, num_epochs=10001, final_epochs=1001)
