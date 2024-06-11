@@ -46,7 +46,7 @@ class SINDy_trainer:
     def __init__(
         self,
         widths: list,
-        activation: str = 'tanh',
+        activation: str = 'sigmoid',
         weight_initializer: str = 'xavier_uniform',
         bias_initializer: str = 'zeros',
         input_dim: int = None,
@@ -172,8 +172,22 @@ class SINDy_trainer:
         Initialize the autoencoder and add it to the loss params.
         """
         # Initialize Encoder and Decoder
-        encoder = Encoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
-        decoder = Decoder(self.model_hparams['input_dim'], self.model_hparams['latent_dim'], self.model_hparams['widths'])
+        encoder = Encoder(
+            input_dim=self.model_hparams['input_dim'],
+            latent_dim=self.model_hparams['latent_dim'],
+            widths=self.model_hparams['widths'],
+            activation=self.model_hparams['activation'],
+            weight_initializer=self.model_hparams['weight_initializer'],
+            bias_initializer=self.model_hparams['bias_initializer']
+        )
+        decoder = Decoder(
+            input_dim=self.model_hparams['input_dim'],
+            latent_dim=self.model_hparams['latent_dim'],
+            widths=self.model_hparams['widths'],
+            activation=self.model_hparams['activation'],
+            weight_initializer=self.model_hparams['weight_initializer'],
+            bias_initializer=self.model_hparams['bias_initializer']
+        )
 
         # Initialize Autoencoder
         self.model = Autoencoder(
