@@ -53,7 +53,7 @@ def pendulum_to_movie(z, dz):
     n_ics = z.shape[0]
     n_samples = z.shape[1]
     n = 51
-    y1,y2 = np.meshgrid(np.linspace(-1.5,1.5,n),np.linspace(1.5,-1.5,n))
+    y1,y2 = np.meshgrid(np.linspace(-1.5,1.5,n),np.linspace(-1.5,1.5,n))
     create_image = lambda theta : np.exp(-((y1-np.cos(theta-np.pi/2))**2 + (y2-np.sin(theta-np.pi/2))**2)/.05)
     argument_derivative = lambda theta,dtheta : -1/.05*(2*(y1 - np.cos(theta-np.pi/2))*np.sin(theta-np.pi/2)*dtheta \
                                                       + 2*(y2 - np.sin(theta-np.pi/2))*(-np.cos(theta-np.pi/2))*dtheta)
@@ -86,8 +86,40 @@ def wrap_to_pi(z):
 
 # Test the functions
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FuncAnimation
     # Number of initial conditions
     n_ics = 5
 
     # Generate pendulum training data
     training_data = get_pendulum_training_data(n_ics)
+
+
+    # Generate pendulum data
+    n_ics = 1  # Number of initial conditions
+    t, x, dx, ddx, z = generate_pendulum_data(n_ics)
+
+    # Set up the figure and axis
+    fig, ax = plt.subplots()
+    ax.set_xlim((0, 51))
+    ax.set_ylim((0, 51))
+    image = ax.imshow(x[0, 0], cmap='viridis', interpolation='none')
+
+    # Initialization function
+    def init():
+        image.set_data(x[0, 0])
+        return [image]
+
+    # Animation function
+    def animate(i):
+        image.set_data(x[0, i])
+        return [image]
+
+    # Create the animation
+    ani = FuncAnimation(fig, animate, init_func=init, frames=len(t), interval=20, blit=True)
+
+    # Save the animation as a GIF file
+    ani.save('pendulum_animation.gif', writer='pillow')
+
+    plt.close(fig)  # Close the figure to avoid displaying a static image
+    print("Animation saved as 'pendulum_animation.gif'")

@@ -41,7 +41,7 @@ if __name__ == "__main__":
     input_dim = 128
     latent_dim = 3
     poly_order = 3
-    widths = [64, 32]
+    widths = [128, 64, 32]
 
     initial_epochs = 10001
     final_epochs = 1001
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         'weight_initializer': 'xavier_uniform',
         'bias_initializer': 'zeros',
         'optimizer_hparams': {'optimizer': "adam"},
-        'include_sine': False,  
+        'include_sine': True, #important  
         'loss_weights': (1, 1e-4, 1e-5, 1e-5),  # Note different weights than Lorenz
         'seed': seed,
         'update_mask_every_n_epoch': 500,
