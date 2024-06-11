@@ -3,7 +3,7 @@ import sys
 from jax.lib import xla_bridge
 
 sys.path.append('../')
-from lorenzUtils import get_lorenz_data
+from lorenzData import get_lorenz_data
 
 from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
