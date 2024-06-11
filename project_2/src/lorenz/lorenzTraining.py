@@ -1,16 +1,13 @@
 import jax
 import sys
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-from scipy.special import legendre
 from jax.lib import xla_bridge
 
 sys.path.append('../')
-from lorenzData import get_lorenz_data, create_jax_batches
+from lorenzData import get_lorenz_data
+from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
 
+create_jax_batches = create_jax_batches_factory(second_order=False)
 
 if __name__ == "__main__":
 
