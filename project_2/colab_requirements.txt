@@ -1,12 +1,12 @@
 flax
-jax
+jax[cuda12]
 lightning
 optax
+torch
 pytorch-lightning
 sympy
+tensorflow
 tensorboardX
 tensorstore
-torch
-torchaudio
-torchmetrics
-torchvision
+tqdm
+
