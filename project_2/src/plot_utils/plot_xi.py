@@ -1,27 +1,69 @@
 import numpy as np
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
 from typing import Optional
+from itertools import product
 
-def plot_sindy_coefficients(xi, title: Optional[str] = "Discovered Coefficients", save_figure: bool = False, save_path: Optional[str] = None):
+def plot_sindy_coefficients(xi, library_hparams, title: Optional[str] = "Discovered Coefficients", save_figure: bool = False, save_path: Optional[str] = None):
     """Plots and optionally saves the SINDy coefficients.
     
     Args:
         xi (ndarray): Array of coefficients to plot.
+        library_hparams (Dict): Hyperparameters for the sindy library for the model
         title (Optional[str]): Title of the plot.
         save_figure (bool): If True, save the plot to the specified path or default path.
         save_path (Optional[str]): Path to save the figure.
     """
     Xi_plot = xi.copy()
     Xi_plot[Xi_plot == 0] = np.inf
-    
+    Xi_plot = np.abs(Xi_plot)
+
+    max_val = round(max(jnp.concatenate(Xi_plot))+5, -1)
+
+    n_states = library_hparams['n_states']
+    poly_order = library_hparams['poly_order']
+    include_constant = library_hparams['include_constant']
+    include_sine = library_hparams['include_sine']
+
+    terms = jnp.diag(jnp.full(n_states, 1))
+    if include_constant:
+        terms = jnp.concatenate([jnp.zeros((1,n_states)), terms], axis=0)
+
+    if poly_order > 1:
+        degrees = jnp.array(list(product(range(poly_order + 1), repeat=n_states)))
+        sums = jnp.sum(degrees, axis=1)
+        degrees = degrees[(sums <= poly_order) & (sums > 1)][::-1]
+        degrees = jnp.array(sorted(degrees, key= lambda x: sum(x)))
+        terms = jnp.concatenate([terms, degrees], axis=0)
+
+    if include_sine:
+        terms = jnp.concatenate([terms, jnp.diag(jnp.full(n_states, -1))], axis=0)
+
+    row_labels = []
+    for row in terms:
+        if sum(row) == 0:
+            row_labels.append(r'$1$')
+        else:
+            label = r"$"
+            for i, deg in enumerate(row):
+                if deg == 1:
+                    label += f"z_{i}"
+                if deg > 1:
+                    label += f"z_{i}^{int(deg)}"
+                if deg == -1:
+                    label += f"sin(z_{i})"
+            label += r"$"
+            row_labels.append(label)
+
     plt.figure(figsize=(1, 2))
-    plt.imshow(Xi_plot, interpolation='none')
+    plt.imshow(Xi_plot, interpolation='none', cmap='Reds')
     plt.title(title)
     plt.xticks([])
-    plt.yticks([])
-    plt.axis('off')
-    plt.clim([-10, 30])
+    plt.yticks([n for n in range(0,20)], labels=row_labels)
+    plt.tight_layout()
+    # plt.axis('off')
+    plt.clim([0, max_val])
     plt.colorbar()
     
     if save_figure:

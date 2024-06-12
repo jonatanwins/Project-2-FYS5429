@@ -39,16 +39,9 @@ def polynomial_degrees(n_states: int, poly_order: int) -> Array:
     """
     degrees = jnp.array(list(product(range(poly_order + 1), repeat=n_states)))
     sums = jnp.sum(degrees, axis=1)
-    filtered_degrees = degrees[(sums <= poly_order) & (sums > 1)][::-1]
-
-    sorted_degrees = []
-    for i in range(2, poly_order + 1):
-        for degree in filtered_degrees:
-            if jnp.sum(degree) == i:
-                sorted_degrees.append(degree)
-    
-    return jnp.array(sorted_degrees)
-
+    degrees = degrees[(sums <= poly_order) & (sums > 1)][::-1]
+    degrees = jnp.array(sorted(degrees, key= lambda x: sum(x)))
+    return degrees
 
 def polynomial(x: Array, degree: Array) -> Array:
     """
