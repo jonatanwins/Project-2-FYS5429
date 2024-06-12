@@ -24,10 +24,10 @@ if __name__ == "__main__":
 
 
     # Set up training and validation data sets as arrays
-    n_ics_training = 50
+    n_ics_training = 100
     n_ics_validation = 10
 
-    batch_size_training = 250
+    batch_size_training = 1024
     batch_size_validation = 250
 
     training_data = get_pendulum_data(n_ics_training)
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     poly_order = 3
     widths = [128, 64, 32]
 
-    initial_epochs = 5001
+    initial_epochs = 10001
     final_epochs = 1001
 
     # Get example input from training_data loader
@@ -62,7 +62,7 @@ if __name__ == "__main__":
         'optimizer_hparams': {'optimizer': "adam", "lr": 1e-4},
         'include_sine': True, #important  
         'loss_weights': (1, 5e-4, 5e-5, 1e-5),  # Note different weights than Lorenz
-        'seed': 42, #importiante 
+        'seed': seed, #importiante 
         'update_mask_every_n_epoch': 500,
         'coefficient_threshold': 0.1,
         'regularization': True,  
@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # Define other parameters dictionary
     trainer_params = {
         'exmp_input': x,
-        'logger_params': {},
+        'logger_params': {'logger_name': 'KathleenReplicas'},
         'enable_progress_bar': True,
         'debug': False,
         'check_val_every_n_epoch': 100,
