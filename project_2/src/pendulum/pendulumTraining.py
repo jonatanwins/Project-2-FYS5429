@@ -44,8 +44,8 @@ if __name__ == "__main__":
     poly_order = 3
     widths = [128, 64, 32]
 
-    initial_epochs = 101
-    final_epochs = 11
+    initial_epochs = 5001
+    final_epochs = 1001
 
     # Get example input from training_data loader
     x, dx, ddx = train_loader[0]
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         'logger_params': {},
         'enable_progress_bar': True,
         'debug': False,
-        'check_val_every_n_epoch': 5,
+        'check_val_every_n_epoch': 100,
     }
 
     # Merge dictionaries
