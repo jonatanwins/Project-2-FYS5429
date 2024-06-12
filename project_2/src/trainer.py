@@ -455,7 +455,7 @@ class SINDy_trainer:
                 self.state = self.state.replace(mask=new_mask)
 
         if out_dist_loader is not None:
-            self.load_model()
+            self.load_model(self.log_dir)
             out_dist_metrics = self.eval_model(out_dist_loader, log_prefix='OutDist/')
             self.logger.log_metrics(out_dist_metrics, step=epoch_idx)
             self.save_metrics('test', out_dist_metrics)
