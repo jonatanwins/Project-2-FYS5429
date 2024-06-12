@@ -5,6 +5,7 @@ from lorenzData import get_lorenz_data, get_lorenz_OutOfDistro_data
 from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
 
+jax.config.update("jax_enable_x64", True)
 def run_simulation(seed):
     create_jax_batches = create_jax_batches_factory(second_order=False)
 
