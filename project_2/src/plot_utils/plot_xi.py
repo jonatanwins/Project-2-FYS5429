@@ -35,7 +35,7 @@ def plot_sindy_coefficients(
     plt.imshow(Xi_plot, interpolation="none", cmap="Reds")
     plt.title(title)
     plt.xticks([])
-    plt.yticks([n for n in range(0, len(row_labels))], labels=row_labels)
+    plt.yticks([n for n in range(0, len(row_labels))], labels=row_labels, fontsize=5)
     plt.tight_layout()
     # plt.axis('off')
     plt.clim([0, max_val])
@@ -82,7 +82,7 @@ def compare_sindy_coefficients(
     cax = ax.imshow(true_xi_plot, interpolation="none", cmap="Reds")
     ax.set_title("True Coefficients")
     ax.set_xticks([])
-    ax.set_yticks([n for n in range(0, len(row_labels))], labels=row_labels)
+    ax.set_yticks([n for n in range(0, len(row_labels))], labels=row_labels, fontsize=5)
     # ax.axis('off')
     fig.colorbar(cax, ax=ax)
 
