@@ -290,19 +290,19 @@ def get_row_context(library_hparams):
 
     if include_sine:
         terms = jnp.concatenate([terms, jnp.diag(jnp.full(n_states, -1))], axis=0)
-
     term_context = []
     for row in terms:
         if sum(row) == 0:
             term_context.append(r"1")
         else:
+            label = ""
             for i, deg in enumerate(row):
                 if deg == 1:
-                    label = f"z_{i+1}"
+                    label += f"z_{i+1}"
                 if deg > 1:
-                    label = f"z_{i+1}^{int(deg)}"
+                    label += f"z_{i+1}^{int(deg)}"
                 if deg == -1:
-                    label = f"sin(z_{i+1})"
+                    label += f"sin(z_{i+1})"
             term_context.append(label)
 
     return term_context
@@ -312,3 +312,5 @@ if __name__ == "__main__":
     # test_sindy_library()
     # test of polynomial_degrees
     print(polynomial_degrees(3, 3))
+    #test term context
+    print(get_row_context({"n_states": 3, "poly_order": 3, "include_sine": False, "include_constant": True}))
