@@ -1,45 +1,46 @@
 import jax
-import sys
 from jax.lib import xla_bridge
-
-sys.path.append('../')
 from pendulumData import get_pendulum_data
-
+import sys
+sys.path.append('../')
 from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
 
-create_jax_batches = create_jax_batches_factory(second_order=True)
+#jax.config.update('enable_x64', True)
+
 
 if __name__ == "__main__":
 
     seed = int(sys.argv[1])
 
-    #Check if jax is using GPU
     print(f"JAX is using: {xla_bridge.get_backend().platform}")
     devices = jax.devices()
     print(f"Number of devices: {len(devices)}")
     for device in devices:
         print(device)
-    print("Performing simulation for seed: ", seed)
+
+    # Create JAX data loaders
+    create_jax_batches = create_jax_batches_factory(second_order=True)
+
 
     # Set up training and validation data sets as arrays
-    n_ics_training = 100
-    n_ics_validation = 20
+    n_ics_training = 50
+    n_ics_validation = 10
 
-    noise_strength = 1e-6
-    batch_size_training = 1024
-    batch_size_validation = 1024
+    batch_size_training = 250
+    batch_size_validation = 250
 
-    training_data = get_pendulum_data(n_ics_training, noise_strength)
+    training_data = get_pendulum_data(n_ics_training)
     train_loader = create_jax_batches(training_data, batch_size_training)
 
 
-    validation_data = get_pendulum_data(n_ics_validation, noise_strength)
+    validation_data = get_pendulum_data(n_ics_validation)
     validation_loader = create_jax_batches(validation_data, batch_size_validation)
 
+
     # Define hyperparameters
-    input_dim = 128
-    latent_dim = 3
+    input_dim = 2601
+    latent_dim = 1
     poly_order = 3
     widths = [128, 64, 32]
 
@@ -47,7 +48,7 @@ if __name__ == "__main__":
     final_epochs = 1001
 
     # Get example input from training_data loader
-    x, dx = train_loader[0]
+    x, dx, ddx = train_loader[0]
 
     # Define hyperparameters dictionary
     hparams = {
@@ -58,10 +59,10 @@ if __name__ == "__main__":
         'activation': 'sigmoid',
         'weight_initializer': 'xavier_uniform',
         'bias_initializer': 'zeros',
-        'optimizer_hparams': {'optimizer': "adam"},
+        'optimizer_hparams': {'optimizer': "adam", "lr": 1e-4},
         'include_sine': True, #important  
-        'loss_weights': (1, 1e-4, 1e-5, 1e-5),  # Note different weights than Lorenz
-        'seed': seed,
+        'loss_weights': (1, 5e-4, 5e-5, 1e-5),  # Note different weights than Lorenz
+        'seed': seed, #importiante 
         'update_mask_every_n_epoch': 500,
         'coefficient_threshold': 0.1,
         'regularization': True,  
@@ -72,10 +73,10 @@ if __name__ == "__main__":
     # Define other parameters dictionary
     trainer_params = {
         'exmp_input': x,
-        'logger_params': {},
+        'logger_params': {'logger_name': 'KathleenReplicas'},
         'enable_progress_bar': True,
         'debug': False,
-        'check_val_every_n_epoch': 400
+        'check_val_every_n_epoch': 100,
     }
 
     # Merge dictionaries
@@ -84,4 +85,4 @@ if __name__ == "__main__":
     # Initialize trainer
     trainer = SINDy_trainer(**params)
 
-    trainer.train_model(train_loader, validation_loader, num_epochs=10001, final_epochs=1001)
+    trainer.train_model(train_loader, validation_loader, num_epochs=initial_epochs, final_epochs=final_epochs)

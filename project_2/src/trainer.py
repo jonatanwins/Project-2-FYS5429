@@ -290,6 +290,7 @@ class SINDy_trainer:
         # Initialize learning rate
         lr = hparams.pop('lr', 1e-3)
         use_lr_schedule = hparams.pop('lr_schedule', False)
+        print(f"Running {optimizer_name} with lr={lr} and lr_schedule={use_lr_schedule}")
 
         if use_lr_schedule:
             # Initialize learning rate scheduler
