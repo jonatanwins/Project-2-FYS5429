@@ -44,7 +44,7 @@ if __name__ == "__main__":
     poly_order = 3
     widths = [128, 64, 32]
 
-    initial_epochs = 10001
+    initial_epochs = 5001
     final_epochs = 1001
 
     # Get example input from training_data loader
