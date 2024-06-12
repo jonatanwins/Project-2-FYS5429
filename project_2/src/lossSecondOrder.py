@@ -105,7 +105,7 @@ def calculate_outputs_and_derivatives_second_order_factory(autoencoder: nn.Modul
         return jacrev(lambda x: autoencoder.encoder.apply({"params": p}, x))(x)
     
     def ddphi_ddx(p, x):
-        return jacfwd(lambda x: dphi_dx(p, x))(x)
+        return jacrev(lambda x: dphi_dx(p, x))(x)
     
     # def dphi_and_ddphi_ddx(p, x):
     #     return value_and_jacrev(lambda x: dphi_dx(p, x), x)
