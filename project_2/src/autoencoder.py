@@ -78,7 +78,8 @@ class Autoencoder(nn.Module):
         return z, x_hat
 
 
-if __name__ == "__main__":
+
+def test():
     from jax import random, tree_map
     import jax.numpy as jnp
     from flax.core.frozen_dict import freeze, FrozenDict
@@ -107,3 +108,6 @@ if __name__ == "__main__":
     print(type(encoder_params))
     z = model.encoder.apply(encoder_params, x)
     print(z)
+
+if __name__ == "__main__":
+    test()

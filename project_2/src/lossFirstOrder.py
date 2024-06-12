@@ -193,7 +193,7 @@ def first_order_loss_fn_factory(autoencoder: nn.Module, loss_weights: Tuple[floa
     
     return first_order_loss_fn
 
-if __name__ == "__main__":
+def test():
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
     from sindyLibrary import library_size
@@ -271,3 +271,6 @@ if __name__ == "__main__":
         loss_first_order_jit, losses_first_order_jit = jitted_loss_fn_first_order(state.params, (x, dx), state.mask)
         print(f"Jitted first-order loss for batch size {batch_size}:", loss_first_order_jit)
         print(f"Jitted first-order loss components for batch size {batch_size}:", losses_first_order_jit)
+
+if __name__ == "__main__":
+    test()

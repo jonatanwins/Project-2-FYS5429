@@ -39,8 +39,16 @@ def polynomial_degrees(n_states: int, poly_order: int) -> Array:
     """
     degrees = jnp.array(list(product(range(poly_order + 1), repeat=n_states)))
     sums = jnp.sum(degrees, axis=1)
-    degrees = degrees[(sums <= poly_order) & (sums > 1)][::-1]
-    return degrees
+    filtered_degrees = degrees[(sums <= poly_order) & (sums > 1)][::-1]
+
+    sorted_degrees = []
+    for i in range(2, poly_order + 1):
+        for degree in filtered_degrees:
+            if jnp.sum(degree) == i:
+                sorted_degrees.append(degree)
+    
+    return jnp.array(sorted_degrees)
+
 
 def polynomial(x: Array, degree: Array) -> Array:
     """
@@ -205,4 +213,8 @@ def test_sindy_library() -> None:
         print("Library size test input: ", lib_size)
 
 if __name__ == "__main__":
-    test_sindy_library()
+    #test_sindy_library()
+    #test of polynomial_degrees
+    print(polynomial_degrees(3, 3))
+
+

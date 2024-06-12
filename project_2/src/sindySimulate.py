@@ -17,8 +17,8 @@ def sindy_simulate(x0, t, Xi, **library_kwargs):
     return sol.y.T
 
 
-# Example usage and testing code
-if __name__ == "__main__":
+def test():
+    # Example usage and testing code
     from jax import random
     from jax import vmap
 
@@ -37,3 +37,6 @@ if __name__ == "__main__":
     print(f"Xi shape: {Xi.shape}")
     x_simulated = sindy_simulate(x0, t, Xi, poly_order=2, include_sine=False)
     print("SINDy Simulation Results:\n", x_simulated)
+
+if __name__ == "__main__":
+    test()

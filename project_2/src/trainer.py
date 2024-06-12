@@ -55,7 +55,7 @@ class SINDy_trainer:
         include_sine: bool = False,
         include_constant: bool = True,
         exmp_input: Any = None,
-        loss_weights: Tuple[float, float, float, float] = (1, 1, 40, 1),
+        loss_weights: Tuple[float, float, float, float] = (1, 1, 1, 1),
         regularization: bool = True,
         second_order: bool = False,
         optimizer_hparams: Dict[str, Any] = {},

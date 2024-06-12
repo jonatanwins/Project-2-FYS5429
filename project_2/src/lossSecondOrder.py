@@ -236,8 +236,7 @@ def second_order_loss_fn_factory(autoencoder: nn.Module, loss_weights: Tuple[flo
     
     return second_order_loss_fn
 
-
-if __name__ == "__main__":
+def test():
     from autoencoder import Encoder, Decoder, Autoencoder
     from trainer import TrainState
     from sindyLibrary import library_size
@@ -304,3 +303,6 @@ if __name__ == "__main__":
     loss_second_order_jit, losses_second_order_jit = jitted_loss_fn_second_order(state.params, (x, dx, ddx), state.mask)
     print("Jitted second-order loss:", loss_second_order_jit)
     print("Jitted second-order loss components:", losses_second_order_jit)
+
+if __name__ == "__main__":
+    test()
