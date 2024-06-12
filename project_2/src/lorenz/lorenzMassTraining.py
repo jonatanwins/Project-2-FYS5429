@@ -94,7 +94,7 @@ def run_simulation(seed, activation='sigmoid', lr_schedule=False):
 
 if __name__ == "__main__":
     # Run simulations for different seeds
-    for seed in [11, 12, 13]:
-        run_simulation(seed, activation='tanh')
-    for seed in [14, 15, 16]:
-        run_simulation(seed, activation='tanh', lr_schedule=True)
+    for seed in [99, 444, 1414, 2020, 2001]:
+        run_simulation(seed, activation='sigmoid')
+    for seed in [707, 747, 777, 1881, 2019]:
+        run_simulation(seed, activation='sigmoid', lr_schedule=True)
