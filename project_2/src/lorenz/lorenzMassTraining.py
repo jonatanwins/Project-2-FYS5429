@@ -1,21 +1,14 @@
 import jax
-import sys
+import gc
 from jax.lib import xla_bridge
-
-sys.path.append('../')
 from lorenzData import get_lorenz_data, get_lorenz_OutOfDistro_data
-
 from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
 
-create_jax_batches = create_jax_batches_factory(second_order=False)
-jax.config.update("jax_enable_x64", True)
+def run_simulation(seed):
+    create_jax_batches = create_jax_batches_factory(second_order=False)
 
-if __name__ == "__main__":
-
-    seed = int(sys.argv[1])
-
-    #Check if jax is using GPU
+    # Check if JAX is using GPU
     print(f"JAX is using: {xla_bridge.get_backend().platform}")
     devices = jax.devices()
     print(f"Number of devices: {len(devices)}")
@@ -36,13 +29,11 @@ if __name__ == "__main__":
     training_data = get_lorenz_data(n_ics_training, noise_strength)
     train_loader = create_jax_batches(training_data, batch_size_training)
 
-
-    validation_data = get_lorenz_data(n_ics_validation) #no noise for val data
+    validation_data = get_lorenz_data(n_ics_validation)  # no noise for val data
     validation_loader = create_jax_batches(validation_data, batch_size_validation)
 
-    out_dist_testing_data = get_lorenz_OutOfDistro_data(n_ics_testing) #no noise for testing
+    out_dist_testing_data = get_lorenz_OutOfDistro_data(n_ics_testing)  # no noise for testing
     out_dist_testing_loader = create_jax_batches(out_dist_testing_data, batch_size_testing)
-
 
     # Define hyperparameters
     input_dim = 128
@@ -79,7 +70,7 @@ if __name__ == "__main__":
     # Define other parameters dictionary
     trainer_params = {
         'exmp_input': x,
-        'logger_params': {},
+        'logger_params': {'logger_name': 'KathleenReplicas'},
         'enable_progress_bar': True,
         'debug': False,
         'check_val_every_n_epoch': 400
@@ -91,4 +82,15 @@ if __name__ == "__main__":
     # Initialize trainer
     trainer = SINDy_trainer(**params)
 
-    trainer.train_model(train_loader, validation_loader, out_dist_testing_loader, num_epochs=10001, final_epochs=1001)
+    # Train model
+    trainer.train_model(train_loader, validation_loader, out_dist_testing_loader, num_epochs=initial_epochs, final_epochs=final_epochs)
+
+    # Clean up to free memory
+    del training_data, train_loader, validation_data, validation_loader, out_dist_testing_data, out_dist_testing_loader, trainer
+    gc.collect()
+
+
+if __name__ == "__main__":
+    # Run simulations for seeds 0 to 9
+    for seed in range(10):
+        run_simulation(seed)

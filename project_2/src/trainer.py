@@ -243,7 +243,7 @@ class SINDy_trainer:
         if not log_dir:
             log_dir = logger_params.get("base_log_dir", "checkpoints/")
             if "logger_name" in logger_params:
-                log_dir = os.path.join(log_dir, logger_params["logger_name"])
+                log_dir = os.path.join(log_dir, logger_params["logger_name"]) #logger name is the folder name
             version = None
         else:
             version = ""

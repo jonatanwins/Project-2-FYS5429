@@ -7,7 +7,7 @@ class Encoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'tanh'
+    activation: str = 'sigmoid'
     weight_initializer: str = 'xavier_uniform'
     bias_initializer: str = 'zeros'  
 
@@ -33,7 +33,7 @@ class Decoder(nn.Module):
     input_dim: int
     latent_dim: int
     widths: list
-    activation: str = 'tanh'
+    activation: str = 'sigmoid'
     weight_initializer: str = 'xavier_uniform'
     bias_initializer: str = 'zeros'
 
