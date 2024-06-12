@@ -424,8 +424,13 @@ class SINDy_trainer:
             self.loss_fn = second_order_loss_fn_factory(**new_loss_params)
         else:
             self.loss_fn = first_order_loss_fn_factory(**new_loss_params)
-    
+
         self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
+
+        ### Reinitialize optimizer if lr_schedule is True
+        if self.optimizer_hparams.get('lr_schedule', False):
+            print("Reinitializing optimizer with learning rate schedule.")
+            self.init_optimizer(final_epochs, len(train_loader))
 
         #### Final training loop
         print(f"Beginning final training loop.")
@@ -463,7 +468,6 @@ class SINDy_trainer:
         self.logger.finalize("success")
 
         return best_eval_metrics
-
 
     def train_epoch_factory(self, train_loader):
         num_train_steps = len(train_loader)

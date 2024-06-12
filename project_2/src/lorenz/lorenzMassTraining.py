@@ -6,7 +6,8 @@ from data_utils import create_jax_batches_factory
 from trainer import SINDy_trainer
 
 jax.config.update("jax_enable_x64", True)
-def run_simulation(seed):
+
+def run_simulation(seed, activation='sigmoid', lr_schedule=False):
     create_jax_batches = create_jax_batches_factory(second_order=False)
 
     # Check if JAX is using GPU
@@ -54,10 +55,10 @@ def run_simulation(seed):
         'latent_dim': latent_dim,
         'poly_order': poly_order,
         'widths': widths,
-        'activation': 'sigmoid',
+        'activation': activation,
         'weight_initializer': 'xavier_uniform',
         'bias_initializer': 'zeros',
-        'optimizer_hparams': {'optimizer': "adam"},
+        'optimizer_hparams': {'optimizer': "adam", 'lr_schedule': lr_schedule}, 
         'include_sine': False,  # Extracted from loss_params
         'loss_weights': (1, 1e-4, 0, 1e-5),  # Extracted from loss_params['weights']
         'seed': seed,
@@ -67,6 +68,7 @@ def run_simulation(seed):
         'second_order': False,  # Added default value
         'include_constant': True  # Added default value
     }
+
 
     # Define other parameters dictionary
     trainer_params = {
@@ -90,8 +92,9 @@ def run_simulation(seed):
     del training_data, train_loader, validation_data, validation_loader, out_dist_testing_data, out_dist_testing_loader, trainer
     gc.collect()
 
-
 if __name__ == "__main__":
-    # Run simulations for seeds 0 to 9
-    for seed in range(10):
-        run_simulation(seed)
+    # Run simulations for different seeds
+    for seed in [11, 12, 13]:
+        run_simulation(seed, activation='tanh')
+    for seed in [14, 15, 16]:
+        run_simulation(seed, activation='tanh', lr_schedule=True)
