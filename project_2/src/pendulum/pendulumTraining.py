@@ -24,10 +24,10 @@ if __name__ == "__main__":
 
 
     # Set up training and validation data sets as arrays
-    n_ics_training = 100
+    n_ics_training = 50
     n_ics_validation = 10
 
-    batch_size_training = 1024
+    batch_size_training = 250
     batch_size_validation = 250
 
     training_data = get_pendulum_data(n_ics_training)
