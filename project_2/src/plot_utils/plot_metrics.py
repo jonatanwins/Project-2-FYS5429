@@ -82,10 +82,11 @@ def plot_multiple_runs(log_dirs: List[str], metric_names: List[str], labels: Opt
 if __name__ == "__main__":
     plt.style.use("plot_settings.mplstyle")
     # Example usage
-    log_dir = "../lorenz/checkpoints/kathleenReplica_1"
+    log_dir = "../lorenz/checkpoints/KathleenReplicas/version_12"
     metrics = RunMetrics(log_dir)
 
     # Plot a single run
     plot_metrics(metrics, metric_names=["train/loss", "val/loss"], title="Loss Metrics")
 
     #plot_multiple_runs(log_dirs, metric_names=["train/loss", "val/loss"], labels=["Version 9", "Version 10"], title="Loss Comparison")
+    #almost all of the out.tensorboard files are empty :(

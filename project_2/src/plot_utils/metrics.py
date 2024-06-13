@@ -42,7 +42,7 @@ class RunMetrics:
 
 # Usage example
 if __name__ == "__main__":
-    log_dir = "../lorenz/checkpoints/version_0"
+    log_dir = "../lorenz/checkpoints/KathleenReplicas/version_12"
     
     metrics = RunMetrics(log_dir)
 

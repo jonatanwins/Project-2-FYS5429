@@ -2,15 +2,14 @@ import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import os
-from typing import Optional
-from itertools import product
+from typing import Optional, Dict
 from sindyLibrary import get_row_context
-
 
 def plot_sindy_coefficients(
     xi,
     library_hparams,
     title: Optional[str] = "Discovered Coefficients",
+    second_order: bool = False,
     save_figure: bool = False,
     save_path: Optional[str] = None,
 ):
@@ -24,20 +23,29 @@ def plot_sindy_coefficients(
         save_path (Optional[str]): Path to save the figure.
     """
     Xi_plot = xi.copy()
-    # Xi_plot[Xi_plot == 0] = np.inf
     Xi_plot = np.abs(Xi_plot)
 
     max_val = round(max(jnp.concatenate(Xi_plot)), 0)
 
-    row_labels = [f"${x}$" for x in get_row_context(library_hparams)]
+    row_labels = [f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)]
+    n_labels = len(row_labels)
+    middle_index = n_labels // 2
+
+    # Defining the y-ticks and labels to include ellipsis
+    yticks = [0, 1, 2, n_labels - 2, n_labels - 1]
+    yticks_labels = [row_labels[0], row_labels[1], row_labels[2], row_labels[-2], row_labels[-1]]
+
+    if n_labels > 5:
+        yticks = [0, 1, 2, middle_index, n_labels - 2, n_labels - 1]
+        yticks_labels = [row_labels[0], row_labels[1], row_labels[2], fr"$\vdots$", row_labels[-2], row_labels[-1]]
 
     plt.figure(figsize=(1, 2))
     plt.imshow(Xi_plot, interpolation="none", cmap="Reds")
     plt.title(title)
     plt.xticks([])
-    plt.yticks([n for n in range(0, len(row_labels))], labels=row_labels, fontsize=5)
+    plt.yticks(yticks, labels=yticks_labels, fontsize=8)
+    plt.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
-    # plt.axis('off')
     plt.clim([0, max_val])
     plt.colorbar()
 
@@ -53,6 +61,7 @@ def compare_sindy_coefficients(
     true_xi,
     discovered_xi,
     library_hparams,
+    second_order: bool = False,
     save_figure: bool = False,
     save_path: Optional[str] = None,
 ):
@@ -66,14 +75,21 @@ def compare_sindy_coefficients(
     """
     true_xi_plot = true_xi.copy()
     true_xi_plot = np.abs(true_xi_plot)
-    # true_xi_plot[true_xi_plot == 0] = np.inf
 
     discovered_xi_plot = discovered_xi.copy()
     discovered_xi_plot = np.abs(discovered_xi_plot)
-    # discovered_xi_plot[discovered_xi_plot == 0] = np.inf
-    ### TODO: Should we use absolute value here????
 
-    row_labels = [f"${x}$" for x in get_row_context(library_hparams)]
+    row_labels = [f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)]
+    n_labels = len(row_labels)
+    middle_index = n_labels // 2
+
+    # Defining the y-ticks and labels to include ellipsis
+    yticks = [0, 1, 2, n_labels - 2, n_labels - 1]
+    yticks_labels = [row_labels[0], row_labels[1], row_labels[2], row_labels[-2], row_labels[-1]]
+
+    if n_labels > 4:
+        yticks = [0, 1, 2, middle_index, n_labels - 2, n_labels - 1]
+        yticks_labels = [row_labels[0], row_labels[1], row_labels[2], fr"$\vdots$", row_labels[-2], row_labels[-1]]
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
@@ -82,8 +98,9 @@ def compare_sindy_coefficients(
     cax = ax.imshow(true_xi_plot, interpolation="none", cmap="Reds")
     ax.set_title("True Coefficients")
     ax.set_xticks([])
-    ax.set_yticks([n for n in range(0, len(row_labels))], labels=row_labels, fontsize=5)
-    # ax.axis('off')
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(yticks_labels, fontsize=12)
+    ax.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
     fig.colorbar(cax, ax=ax)
 
     # Plot discovered coefficients
@@ -91,10 +108,11 @@ def compare_sindy_coefficients(
     cax = ax.imshow(discovered_xi_plot, interpolation="none", cmap="Reds")
     ax.set_title("Discovered Coefficients")
     ax.set_xticks([])
-    ax.set_yticks([n for n in range(0, len(row_labels))], labels=row_labels)
-    # ax.axis('off')
+    ax.set_yticks(yticks)
+    ax.set_yticklabels(yticks_labels, fontsize=12)
     fig.colorbar(cax, ax=ax)
 
+    plt.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
 
     if save_figure:
@@ -109,16 +127,27 @@ if __name__ == "__main__":
     plt.style.use("plot_settings.mplstyle")
 
     # Example coefficients
-    true_xi = np.zeros((10, 10))
+    true_xi = np.zeros((10, 3))
     true_xi[0, 1] = 1.0
-    true_xi[1, 3] = 2.0
-    true_xi[2, 5] = 3.0
+    true_xi[3, 1] = 1.8
+    true_xi[5, 2] = 2.9
 
-    discovered_xi = np.zeros((10, 10))
-    discovered_xi[0, 1] = 1.0
-    discovered_xi[1, 3] = 1.8
-    discovered_xi[2, 5] = 2.9
-    discovered_xi[3, 7] = 0.5  # False positive
 
+    discovered_xi = np.zeros((10, 3))
+    discovered_xi[1, 0] = 0.9
+    discovered_xi[3, 1] = 1.7
+    discovered_xi[5, 2] = 2.8
+
+    n_states = 3
+    poly_order = 2
+    include_sine = False
+    include_constant = True
+    lib_kwargs = {
+        "n_states": n_states,
+        "poly_order": poly_order,
+        "include_sine": include_sine,
+        "include_constant": include_constant,
+    }
     # Plot comparison without saving
-    compare_sindy_coefficients(true_xi, discovered_xi)
+    compare_sindy_coefficients(true_xi, discovered_xi, library_hparams=lib_kwargs, second_order=False)
+    plot_sindy_coefficients(true_xi, library_hparams=lib_kwargs, second_order=True)

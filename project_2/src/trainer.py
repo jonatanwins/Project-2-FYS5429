@@ -369,6 +369,7 @@ class SINDy_trainer:
         out_dist_loader: Optional[Iterator] = None,
         num_epochs: int = 5000,
         final_epochs: int = 500,
+        patience: int = 200  
     ) -> Dict[str, Any]:
         """
         Train the model using the training and validation loaders. Optionally, evaluate the model on a test loader.
@@ -378,24 +379,25 @@ class SINDy_trainer:
             val_loader (Iterator): Validation data loader
             out_dist_loader (Optional[Iterator], optional): Out-of-distribution data loader. Defaults to None.
             num_epochs (int, optional): Number of epochs to train the model. Defaults to 500.
-        
+            patience (int, optional): Number of epochs to wait for improvement before stopping. Defaults to 10.
         """
-        ### Initialize the logger
+        # Initialize the logger
         self.init_logger(self.logger_params)
         self.train_epoch_factory(train_loader)
 
-        ### shuffle key
+        # Shuffle key
         shuffle_key = random.PRNGKey(self.seed)
 
-        ### Initialize the optimizer
+        # Initialize the optimizer
         self.init_optimizer(num_epochs + final_epochs, len(train_loader))
         best_eval_metrics = None
+        epochs_no_improve = 0  # Track the number of epochs with no improvement
+        early_stop = False
 
-        #### Initial training loop
+        # Initial training loop
         for epoch_idx in self.tracker(range(1, num_epochs + 1), desc="Epochs"):
-            
             shuffle_key, _ = random.split(shuffle_key)
-            ### Shuffle the train loader
+            # Shuffle the train loader
             train_loader = self.shuffle_fn(train_loader, shuffle_key)
 
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
@@ -412,15 +414,27 @@ class SINDy_trainer:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
+                    epochs_no_improve = 0  # Reset the counter if there's an improvement
+                else:
+                    epochs_no_improve += 1  # Increment the counter if there's no improvement
+
+                if epochs_no_improve >= patience:
+                    print(f"Early stopping at epoch {epoch_idx} due to no improvement for {patience} epochs.")
+                    early_stop = True
+                    break
 
             if epoch_idx % self.update_mask_every_n_epoch == 0:
-                new_mask = update_mask(self.state.params["sindy_coefficients"]) # Update the mask to be zero where the coefficients are small(do not need to mult by mask first)
+                new_mask = update_mask(self.state.params["sindy_coefficients"])  # Update the mask to be zero where the coefficients are small(do not need to mult by mask first)
                 self.state = self.state.replace(mask=new_mask)
-            
-        print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")
+
+        if not early_stop:
+            print(f"Completed {num_epochs} epochs. Starting final training loop without regularization.")
+        else:
+            print(f"Early stopping triggered. Skipping to final training loop without regularization.")
+
         new_loss_params = self.loss_params.copy()  # Create a copy of the loss parameters
         new_loss_params['regularization'] = False  # Update the copy with regularization=False
-        
+
         if self.second_order:
             self.loss_fn = second_order_loss_fn_factory(**new_loss_params)
         else:
@@ -428,22 +442,22 @@ class SINDy_trainer:
 
         self.create_jitted_functions()  # Recreate the jitted functions with the new loss function
 
-        ### Reinitialize optimizer if lr_schedule is True
+        # Reinitialize optimizer if lr_schedule is True
         if self.optimizer_hparams.get('lr_schedule', False):
             print("Reinitializing optimizer with learning rate schedule.")
             self.init_optimizer(final_epochs, len(train_loader))
 
-        #### Final training loop
+        # Final training loop
         print(f"Beginning final training loop.")
         for epoch_idx in self.tracker(range(1, final_epochs + 1), desc="Final Epochs without regularization"):
-            #shuffle train loader, does not work for pytorch dataloader!!
+            # Shuffle train loader, does not work for pytorch dataloader!!
             shuffle_key, _ = random.split(shuffle_key)
             train_loader = self.shuffle_fn(train_loader, shuffle_key)
 
             self.state, metrics_sum = self.train_epoch(self.state, train_loader)
             train_metrics = {f"train/{key}": value.item() for key, value in metrics_sum.items()}
 
-            overall_epoch_idx = epoch_idx + num_epochs  
+            overall_epoch_idx = epoch_idx + num_epochs
             self.logger.log_metrics(train_metrics, step=overall_epoch_idx)
 
             if epoch_idx % self.check_val_every_n_epoch == 0:
@@ -455,7 +469,7 @@ class SINDy_trainer:
                     best_eval_metrics.update(train_metrics)
                     self.save_model(step=overall_epoch_idx)
                     self.save_metrics("best_eval", eval_metrics)
-            
+
             if epoch_idx % self.update_mask_every_n_epoch == 0:
                 new_mask = update_mask(self.state.params["sindy_coefficients"])
                 self.state = self.state.replace(mask=new_mask)
@@ -465,7 +479,7 @@ class SINDy_trainer:
             out_dist_metrics = self.eval_model(out_dist_loader, log_prefix='OutDist/')
             self.logger.log_metrics(out_dist_metrics, step=epoch_idx)
             self.save_metrics('test', out_dist_metrics)
-        
+
         self.logger.finalize("success")
 
         return best_eval_metrics
