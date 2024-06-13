@@ -62,7 +62,7 @@ if __name__ == "__main__":
         'optimizer_hparams': {'optimizer': "adam", "lr": 1e-4},
         'include_sine': True, #important  
         'loss_weights': (1, 5e-4, 5e-5, 1e-5),  # Note different weights than Lorenz
-        'seed': 42, #importiante 
+        'seed': seed, #importiante 
         'update_mask_every_n_epoch': 500,
         'coefficient_threshold': 0.1,
         'regularization': True,  
