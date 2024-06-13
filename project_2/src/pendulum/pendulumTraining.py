@@ -73,7 +73,7 @@ if __name__ == "__main__":
     # Define other parameters dictionary
     trainer_params = {
         'exmp_input': x,
-        'logger_params': {},
+        'logger_params': {'logger_name': 'KathleenReplicas'},
         'enable_progress_bar': True,
         'debug': False,
         'check_val_every_n_epoch': 100,
