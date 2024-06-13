@@ -1,7 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 from typing import List, Optional
-from metrics import RunMetrics  # type: ignore -goofy linitng issue
+from plot_utils.metrics import RunMetrics  # type: ignore -goofy linitng issue
 
 def plot_metrics(metrics: RunMetrics, metric_names: List[str], title: Optional[str] = None, save_figure: bool = False, save_path: Optional[str] = None):
     """Plots and optionally saves the given metric(s) from a RunMetrics object.
