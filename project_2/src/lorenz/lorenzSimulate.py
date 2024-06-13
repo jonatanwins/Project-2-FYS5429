@@ -4,11 +4,12 @@ import os
 from typing import Optional
 
 def plot_single_trajectory(z_sim, title: Optional[str] = "Discovered Dynamics", save_figure: bool = False, save_path: Optional[str] = None):
-    fig = plt.figure(figsize=(9, 3))
-    ax1 = fig.add_subplot(1, 3, 1, projection='3d')
-    ax1.plot(z_sim[:, 0], z_sim[:, 1], z_sim[:, 2], linewidth=2)
+    fig = plt.figure(figsize=(5, 3))
+    ax1 = fig.add_subplot(1, 1, 1, projection='3d')
+    ax1.plot(z_sim[:, 0], z_sim[:, 1], z_sim[:, 2], linewidth=0.5)
     ax1.set_title(title)
-    plt.axis('off')
+    ax1.tick_params(axis='both', which='major')
+    ax1.axis('off')
     
     if save_figure:
         save_path = save_path or "."
