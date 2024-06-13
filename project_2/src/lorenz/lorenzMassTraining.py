@@ -73,7 +73,7 @@ def run_simulation(seed, activation='sigmoid', lr_schedule=False):
     # Define other parameters dictionary
     trainer_params = {
         'exmp_input': x,
-        'logger_params': {'logger_name': 'KathleenReplicas'},
+        'logger_params': {'logger_name': 'NonLinear'},
         'enable_progress_bar': True,
         'debug': False,
         'check_val_every_n_epoch': 400
