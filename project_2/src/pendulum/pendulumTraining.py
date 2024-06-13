@@ -1,3 +1,7 @@
+"""
+trainingscript for training a single pendulum model
+"""
+
 import jax
 from jax.lib import xla_bridge
 from pendulumData import get_pendulum_data

@@ -266,11 +266,13 @@ def test_sindy_library() -> None:
         print("Library size test input: ", lib_size)
 
 
-def get_row_context(library_hparams):
+def get_row_context(library_hparams, second_order=False):
     """Returns a list of strings with the term for each row of the library
-
+        if second_order is True, then for each term the first n_states//2 
+        are the z terms and the last are \\dot{z} (dz) terms
     Args:
         library_hparams (Dict): Hyperparameters for the sindy library for the model
+        second_order (bool, optional): If the library is second order. Defaults to False.
     """
     n_states = library_hparams["n_states"]
     poly_order = library_hparams["poly_order"]
@@ -290,27 +292,56 @@ def get_row_context(library_hparams):
 
     if include_sine:
         terms = jnp.concatenate([terms, jnp.diag(jnp.full(n_states, -1))], axis=0)
-    term_context = []
-    for row in terms:
-        if sum(row) == 0:
-            term_context.append(r"1")
-        else:
-            label = ""
-            for i, deg in enumerate(row):
-                if deg == 1:
-                    label += f"z_{i+1}"
-                if deg > 1:
-                    label += f"z_{i+1}^{int(deg)}"
-                if deg == -1:
-                    label += f"sin(z_{i+1})"
-            term_context.append(label)
 
-    return term_context
+    if second_order:
+        term_context = []
+        for row in terms:
+            if sum(row) == 0:
+                term_context.append(r"1")
+            else:
+                label = ""
+                for i, deg in enumerate(row):
+                    if i < n_states // 2:
+                        if deg == 1:
+                            label += f"z_{i+1}"
+                        if deg > 1:
+                            label += f"z_{i+1}^{int(deg)}"
+                        if deg == -1:
+                            label += f"sin(z_{i+1})"
+                    else:
+                        j = i - n_states // 2
+                        if deg == 1:
+                            label += rf"\dot{{z}}_{j+1}"
+                        if deg > 1:
+                            label += rf"\dot{{z}}_{j+1}^{int(deg)}"
+                        if deg == -1:
+                            label += rf"sin(\dot{{z}}_{j+1})"
+
+                term_context.append(label)
+        return term_context
+    else:
+        term_context = []
+        for row in terms:
+            if sum(row) == 0:
+                term_context.append(r"1")
+            else:
+                label = ""
+                for i, deg in enumerate(row):
+                    if deg == 1:
+                        label += f"z_{i+1}"
+                    if deg > 1:
+                        label += f"z_{i+1}^{int(deg)}"
+                    if deg == -1:
+                        label += f"sin(z_{i+1})"
+                term_context.append(label)
+
+        return term_context
 
 
 if __name__ == "__main__":
     # test_sindy_library()
     # test of polynomial_degrees
-    print(polynomial_degrees(3, 3))
+    #print(polynomial_degrees(3, 3))
     #test term context
     print(get_row_context({"n_states": 3, "poly_order": 3, "include_sine": False, "include_constant": True}))
+    print(get_row_context({"n_states": 2, "poly_order": 3, "include_sine": True, "include_constant": True}, True))
