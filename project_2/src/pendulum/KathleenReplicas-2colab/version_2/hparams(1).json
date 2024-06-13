@@ -1,0 +1,33 @@
+{
+    "input_dim": 2601,
+    "latent_dim": 1,
+    "widths": [
+        128,
+        64,
+        32
+    ],
+    "activation": "sigmoid",
+    "weight_initializer": "xavier_uniform",
+    "bias_initializer": "zeros",
+    "lib_size": 12,
+    "autoencoder": null,
+    "loss_weights": [
+        1,
+        0.0005,
+        5e-05,
+        1e-05
+    ],
+    "regularization": true,
+    "poly_order": 3,
+    "include_sine": true,
+    "include_constant": true,
+    "n_states": 2,
+    "optimizer_hparams": {
+        "optimizer": "adam",
+        "lr": 0.0001
+    },
+    "update_mask_every_n_epoch": 500,
+    "coefficient_threshold": 0.1,
+    "second_order": true,
+    "seed": 420
+}
