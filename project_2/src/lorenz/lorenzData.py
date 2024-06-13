@@ -12,10 +12,7 @@ from sindyLibrary import library_size
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.special import legendre
-from torch.utils.data import Dataset
-import jax.numpy as jnp
-from jax import jit
-import jax
+
 
 def lorenz(t, z, sigma=10, beta=8/3, rho=28):
     x, y, z = z
@@ -178,7 +175,7 @@ def get_lorenz_data(n_ics, noise_strength=0, test_data=False):
     # Generate initial conditions
     ics = ic_widths * (np.random.rand(n_ics, 3) - 0.5) + ic_means
 
-    data = generate_lorenz_data(ics, t, input_dim, noise_strength, normalization=np.array([1 / 40, 1 / 40, 1 / 40]))
+    data = generate_lorenz_data(ics, t, input_dim, linear=False, normalization=np.array([1 / 40, 1 / 40, 1 / 40]))
 
     x = data["x"].reshape((-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
     dx = data["dx"].reshape((-1, input_dim)) + noise_strength * np.random.randn(n_steps * n_ics, input_dim)
