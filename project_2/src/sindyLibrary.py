@@ -341,7 +341,7 @@ def get_row_context(library_hparams, second_order=False):
 if __name__ == "__main__":
     # test_sindy_library()
     # test of polynomial_degrees
-    #print(polynomial_degrees(3, 3))
+    print(polynomial_degrees(3, 3))
     #test term context
     print(get_row_context({"n_states": 3, "poly_order": 3, "include_sine": False, "include_constant": True}))
     print(get_row_context({"n_states": 2, "poly_order": 3, "include_sine": True, "include_constant": True}, True))

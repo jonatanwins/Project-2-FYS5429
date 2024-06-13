@@ -1,0 +1,11 @@
+{
+    "val/dynamics_x": 3.506264842694873e-07,
+    "val/dynamics_z": 0.0,
+    "val/loss": 9.04538155171446e-07,
+    "val/reconstruction": 5.539116709019588e-07,
+    "train/dynamics_x": 3.459259440051661e-07,
+    "train/dynamics_z": 0.0,
+    "train/loss": 1.2457989070522657e-05,
+    "train/reconstruction": 2.2444094279335896e-06,
+    "train/regularization": 9.867653698583903e-06
+}

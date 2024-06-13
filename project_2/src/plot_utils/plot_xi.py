@@ -43,7 +43,7 @@ def plot_sindy_coefficients(
     plt.imshow(Xi_plot, interpolation="none", cmap="Reds")
     plt.title(title)
     plt.xticks([])
-    plt.yticks(yticks, labels=yticks_labels, fontsize=8)
+    plt.yticks(yticks, labels=yticks_labels, fontsize=7)
     plt.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
     plt.clim([0, max_val])
