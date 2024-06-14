@@ -4,10 +4,10 @@ trainingscript for training a single pendulum model
 
 import jax
 from jax.lib import xla_bridge
-from pendulumData import get_pendulum_data
 import sys
 sys.path.append('../')
 from data_utils import create_jax_batches_factory
+from pendulum.pendulumData import get_pendulum_data
 from trainer import SINDy_trainer
 
 #jax.config.update('enable_x64', True)
