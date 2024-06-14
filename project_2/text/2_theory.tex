@@ -34,7 +34,7 @@ The overall optimization problem is to find the weights and biases of both the e
     \label{fig:SINDy_diagram}
 \end{figure}
 
-The SINDy (Sparse Identification of Nonlinear Dynamics) algorithm is a procedure first described in the paper \cite{Brunton_2016} for taking time-series data and extracting interpretable and generalizable dynamical system models that describe the data. If we use the SINDy algorithm on a dynamical system described by a differential equation:
+The SINDy (Sparse Identification of Nonlinear Dynamics) algorithm is a procedure first described in the paper \cite{Brunton_2016} for taking time-series data and extracting interpretable and generalizable dynamical system models that describe the data. If we use the SINDy algorithm on a dynamical system described by a first order ordinary differential equation:
 $$
 \frac{d \mathbf{x}}{d t}=\mathbf{f}(\mathbf{x})
 $$
@@ -72,7 +72,7 @@ SINDy is one of many methods within the broader category of symbolic regression.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.48\textwidth]{project_2/images/autoencoder_diagram.pdf}
+    \includegraphics[width=0.48\textwidth]{project_2/images/diagram-20240614.pdf}
     \caption{}
     \label{fig:autoencoder_diagram}
 \end{figure}
@@ -111,11 +111,37 @@ where $\lambda_1, \lambda_2$, and $\lambda_3$ are hyperparameters that determine
     \underbrace{\|\mathbf{x}-\psi(\mathbf{z})\|_2^2}_{\text {reconstruction loss }}
     +\underbrace{\lambda_1\left\|\dot{\mathbf{x}}-\left(\nabla_{\mathbf{z}} \psi(\mathbf{z})\right)\left(\boldsymbol{\Theta}\left(\mathbf{z}^T\right) \boldsymbol{\Xi}\right)\right\|_2^2}_{\text {SINDy loss in } \dot{\mathbf{x}}} \notag 
     \\
-    +\underbrace{\lambda_2\left\|\left(\nabla_{\mathbf{x}} \mathbf{z}\right) \dot{\mathbf{x}}-\boldsymbol{\Theta}\left(\mathbf{z}^T\right) \boldsymbol{\Xi}\right\|_2^2}_{\text {SINDy loss in } \dot{\mathbf{z}}}+\underbrace{\lambda_3\|\boldsymbol{\Xi}\|_1}_{\begin{array}{c}\text { SINDy } \\ \text { regularization }\end{array}}
+    +\underbrace{\lambda_2\left\|\left(\nabla_{\mathbf{x}} \mathbf{z}\right) \dot{\mathbf{x}}-\boldsymbol{\Theta}\left(\mathbf{z}^T\right) \boldsymbol{\Xi}\right\|_2^2}_{\text {SINDy loss in } \dot{\mathbf{z}}}+\underbrace{\lambda_3\|\boldsymbol{\Xi}\|_1}_{\begin{array}{c}\text { SINDy regularization }\end{array}}
 \end{align}
-To ensure a parsimonious model, sequential thresholding is applied during training, setting coefficients below a certain threshold to zero at fixed intervals, effectively approximating L0 regularization.
+
+\begin{align}
+    \underbrace{\|\mathbf{x}-\psi(\mathbf{z})\|_2^2}_{\text{reconstruction loss}}
+    + \underbrace{\lambda_1\left\|\dot{\mathbf{x}}-\left(\nabla_{\mathbf{z}} \psi(\mathbf{z})\right)\left(\boldsymbol{\Theta}\left(\mathbf{z}^T\right) \boldsymbol{\Xi}\right)\right\|_2^2}_{\text{SINDy loss in } \dot{\mathbf{x}}} \notag 
+    \\
+    + \underbrace{\lambda_2\left\|\left(\nabla_{\mathbf{x}} \mathbf{z}\right) \dot{\mathbf{x}}-\boldsymbol{\Theta}\left(\mathbf{z}^T\right) \boldsymbol{\Xi}\right\|_2^2}_{\text{SINDy loss in } \dot{\mathbf{z}}}
+    + \underbrace{\lambda_3\|\boldsymbol{\Xi}\|_1}_{\text{SINDy regularization}}
+\end{align}
+
+
+
+To ensure a parsimonious model, \textcite{Champion_2019} employs the sequential thresholding least-squares algorithm during training, setting coefficients below a certain threshold to zero at fixed intervals, promoting sparsity in the same way as L0 regularization by penalizing solutions with an abundance of coefficients. 
 
 The technique described by Champion reduces the complexity of the problem which potentially lets the joint autoencoder SINDy algorithm uncover the underlying structure of the problem more easily than the plain SINDy algorithm.
+\subsection{Second order loss function}
+Note that the previous autoencoder SINDy loss formulation only applies to the case where one wishes to determine first-order derivatives. 
+For second-order equations, additional work is needed to determine the losses. 
+Hence, by applying the chain rule, one arrives at the following loss formulations:
+\begin{equation*}
+    \mathcal L_{\ddot{x}} = \|\ddot{x} - \|
+\end{equation*}
+ 
+Expand $(a+b)^n$:
+\begin{gather*}
+  (a + b)^n\\
+  (a\ + \ b)^n\\
+  (a\quad + \quad b)^n\\
+  (a\qquad + \qquad b)^n
+\end{gather*}
 
 \subsection{Backpropagation}
 Backpropagation is a supervised learning algorithm used for training artificial neural networks, particularly in the context of deep learning, such as for autoencoders. Backpropagation involves a forward pass to compute the network output and loss, followed by a backward pass to compute gradients. These gradients are then used to update the network's weights and biases, minimizing the loss function over successive iterations. \cite{backprop}. 

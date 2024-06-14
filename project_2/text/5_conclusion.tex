@@ -1,6 +1,8 @@
-In conclusion, we are able to to rediscover the true dynamics of a Lorenz system and the nonlinear pendulu through our autoencoder SINDy implementation. 
+In conclusion, we are able to to rediscover the true dynamics of a Lorenz system and the nonlinear pendulum through our autoencoder SINDy implementation. 
 In doing so, we validate our results against the findings of \textcite{Champion_2019}, achieving similar results. 
-Our findings indicate that 
+Our findings indicate that
+
+Our best model lacks \ref{FIGUREN} 
 
 Nevertheless, different potential improvements might be introduced to aid the convergence and robustness of the model. 
 As the aim of our experiments was to display the autoencoder SINDy framework, we set a constant learning rate similar to \textcite{Champion_2019}. 
@@ -14,7 +16,7 @@ In addition, by introducing regularization into the loss formulation, we rely on
 Although this yields sufficient performance in the aforementioned experiments, other optimization methods that rectify these potential challenges might yield improved performance. 
 
 In fact, \textcite{SR3} have proposed an alternative optimization algorithm to sequential threshold least squares named SR3. 
-SR3 is a sparse regression method, applying \textit{relaxation} to the original loss formulation and relying on proximal gradients for determining optimzal descent directions on non-smooth objectives, promising computational efficiency, higher accuracy, faster convergence rates, and greater flexibility compared to traditional methods. 
+SR3 is a sparse regression method, applying \textit{relaxation} to the original loss formulation and relying on proximal gradients for determining optimal descent directions on non-smooth objectives, promising computational efficiency, higher accuracy, faster convergence rates, and greater flexibility compared to traditional methods. 
 SR3 has already successfully been demonstrated for regular SINDy \cite{SR3_SINDy}, yielding strong performance. 
 Hence, it might be constructive to further explore the SR3 algorihtm, and to extend it to the Autoencoder SINDy framework. 
 
