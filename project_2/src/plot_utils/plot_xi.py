@@ -32,6 +32,18 @@ def plot_sindy_coefficients(
     row_labels = [
         f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)
     ]
+    
+    row_sums = [sum(x) for x in Xi_plot]
+
+    yticks = [0]
+    yticks_labels = [r"$1$"]
+    for i in range(1, len(row_labels)):
+        if row_sums[i] != 0:
+            yticks.append(i)
+            yticks_labels.append(row_labels[i])
+
+    """
+    # Maybe remove?
     n_labels = len(row_labels)
     middle_index = n_labels // 2
 
@@ -55,12 +67,13 @@ def plot_sindy_coefficients(
             row_labels[-2],
             row_labels[-1],
         ]
+    """
 
     # plt.figure(figsize=(1, 2))
     plt.imshow(Xi_plot, interpolation="none", cmap="Reds")
     plt.title(title)
     plt.xticks([])
-    plt.yticks(yticks, labels=yticks_labels, fontsize=7)
+    plt.yticks(yticks, labels=yticks_labels, fontsize=12)
     plt.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
     plt.clim([0, max_val])
@@ -102,9 +115,24 @@ def compare_sindy_coefficients(
     discovered_xi_plot = discovered_xi.copy()
     discovered_xi_plot = np.abs(discovered_xi_plot)
 
+    max_val = max(round(max(jnp.concatenate(true_xi_plot)), 0), round(max(jnp.concatenate(discovered_xi_plot)), 0))
+
     row_labels = [
         f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)
     ]
+
+    true_row_sums = [sum(x) for x in true_xi_plot]
+    discovered_row_sums = [sum(x) for x in discovered_xi_plot]
+
+    yticks = [0]
+    yticks_labels = [r"$1$"]
+    for i in range(1, len(row_labels)):
+        if true_row_sums[i] != 0 or discovered_row_sums[i] != 0:
+            yticks.append(i)
+            yticks_labels.append(row_labels[i])
+
+    """
+    # Maybe remove?
     n_labels = len(row_labels)
     middle_index = n_labels // 2
 
@@ -118,7 +146,7 @@ def compare_sindy_coefficients(
         row_labels[-1],
     ]
 
-    if n_labels > 4:
+    if n_labels > 5:
         yticks = [0, 1, 2, middle_index, n_labels - 2, n_labels - 1]
         yticks_labels = [
             row_labels[0],
@@ -128,22 +156,25 @@ def compare_sindy_coefficients(
             row_labels[-2],
             row_labels[-1],
         ]
+    """
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(5, 5))
 
     # Plot true coefficients
     ax = axes[0]
     cax = ax.imshow(true_xi_plot, interpolation="none", cmap="Reds")
+    cax.set_clim(0, max_val)
     ax.set_title("True Coefficients")
     ax.set_xticks([])
     ax.set_yticks(yticks)
     ax.set_yticklabels(yticks_labels, fontsize=12)
     ax.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
-    fig.colorbar(cax, ax=ax)
+    #fig.colorbar(cax, ax=ax)
 
     # Plot discovered coefficients
     ax = axes[1]
     cax = ax.imshow(discovered_xi_plot, interpolation="none", cmap="Reds")
+    cax.set_clim(0, max_val)
     ax.set_title("Discovered Coefficients")
     ax.set_xticks([])
     ax.set_yticks(yticks)
