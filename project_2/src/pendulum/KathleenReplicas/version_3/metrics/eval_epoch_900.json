@@ -1,7 +1,0 @@
-{
-    "val/dynamics_x": 1.550207525724545e-05,
-    "val/dynamics_z": 7.249846589729714e-08,
-    "val/loss": 1.9737759430427104e-05,
-    "val/reconstruction": 2.783411218842957e-06,
-    "val/regularization": 1.379776222165674e-06
-}
