@@ -30,7 +30,7 @@ def plot_metrics(metrics: RunMetrics, metric_names: List[str], title: Optional[s
     plt.grid(True)
     
     if save_figure:
-        save_path = save_path or "../../figures"
+        save_path = save_path or "../../images"
         filename = title or "metrics_plot"
         os.makedirs(save_path, exist_ok=True)
         plt.savefig(os.path.join(save_path, f"{filename}.png"))
