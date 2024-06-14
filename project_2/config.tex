@@ -8,7 +8,10 @@
 % \usepackage{booktabs,dcolumn}
 \usepackage{color}
 \usepackage{comment}
- 
+\usepackage{mathtools}
+
+\usepackage{siunitx} % Units
+
 \usepackage{textpos}
 % \usepackage{booktabs}
 \usepackage{multirow,bigdelim}
@@ -19,9 +22,34 @@
 % \usepackage{caption}
 % \usepackage{subcaption}
 \usepackage{subfig}
+\def\subfigure{\subfloat}
 \usepackage{pgfplots}
 \usepackage{microtype}
 % \usepackage{tabularx}
+
+
+\usepackage{graphicx} % Required for inserting images
+\usepackage{amsmath} % Required for advanced math typesetting
+\usepackage{amsfonts} % Required for extended math font support
+\usepackage{amssymb} % Required for additional math symbols
+
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs} % For prettier tables
+
+
+% #############
+\usepackage{titlesec}
+
+\setcounter{secnumdepth}{4}
+
+\titleformat{\paragraph}
+{\normalfont\normalsize\bfseries}{\theparagraph}{1em}{}
+\titlespacing*{\paragraph}
+{0pt}{3.25ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+% #############
+
 
 \pgfplotsset{width=\textwidth*0.5, height=\textwidth/3*0.5,compat=1.18}
 
@@ -62,6 +90,21 @@ apsrev41Control%
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclareMathOperator{\MSE}{MSE}
 \DeclareMathOperator*{\compfunc}{\bigcirc}
+
+\newcommand{\R}{\mathbb{R}}
+% The good phi
+\renewcommand{\phi}{\upvarphi}
+
+% for SINDy illustration
+\newcommand{\oThree}{\textcolor{red!70}{\bullet}}
+\newcommand{\oSix}{\textcolor{orange!80}{\bullet}}
+\newcommand{\oNine}{\textcolor{violet!70}{\bullet}}
+
+\newcommand{\graydot}{\textcolor{gray!30}{\bullet}}
+\newcommand{\grayrow}{\graydot & \graydot &  \graydot & \graydot & \graydot & \graydot & \graydot & \cdots & \graydot & \graydot}
+\newcommand{\orangerow}{\oThree & \oSix & \oNine}
+
+
 
 % \bibliographystyle{apsrev4-1}
 %\usepackage[left]{lineno}

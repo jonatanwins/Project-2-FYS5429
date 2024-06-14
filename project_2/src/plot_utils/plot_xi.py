@@ -5,13 +5,15 @@ import os
 from typing import Optional, Dict
 from sindyLibrary import get_row_context
 
+
 def plot_sindy_coefficients(
     xi,
     library_hparams,
     title: Optional[str] = "Discovered Coefficients",
     second_order: bool = False,
     save_figure: bool = False,
-    save_path: Optional[str] = None,
+    folder_path: Optional[str] = None,
+    file_name: Optional[str] = None,
 ):
     """Plots and optionally saves the SINDy coefficients.
 
@@ -27,32 +29,53 @@ def plot_sindy_coefficients(
 
     max_val = round(max(jnp.concatenate(Xi_plot)), 0)
 
-    row_labels = [f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)]
+    row_labels = [
+        f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)
+    ]
     n_labels = len(row_labels)
     middle_index = n_labels // 2
 
     # Defining the y-ticks and labels to include ellipsis
     yticks = [0, 1, 2, n_labels - 2, n_labels - 1]
-    yticks_labels = [row_labels[0], row_labels[1], row_labels[2], row_labels[-2], row_labels[-1]]
+    yticks_labels = [
+        row_labels[0],
+        row_labels[1],
+        row_labels[2],
+        row_labels[-2],
+        row_labels[-1],
+    ]
 
     if n_labels > 5:
         yticks = [0, 1, 2, middle_index, n_labels - 2, n_labels - 1]
-        yticks_labels = [row_labels[0], row_labels[1], row_labels[2], fr"$\vdots$", row_labels[-2], row_labels[-1]]
+        yticks_labels = [
+            row_labels[0],
+            row_labels[1],
+            row_labels[2],
+            rf"$\vdots$",
+            row_labels[-2],
+            row_labels[-1],
+        ]
 
-    plt.figure(figsize=(1, 2))
+    # plt.figure(figsize=(1, 2))
     plt.imshow(Xi_plot, interpolation="none", cmap="Reds")
     plt.title(title)
     plt.xticks([])
     plt.yticks(yticks, labels=yticks_labels, fontsize=7)
-    plt.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
+    plt.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
     plt.clim([0, max_val])
     plt.colorbar()
 
     if save_figure:
-        save_path = save_path or "."
-        os.makedirs(save_path, exist_ok=True)
-        plt.savefig(os.path.join(save_path, f"{title.replace(' ', '_').lower()}.png"))
+        if folder_path and file_name:
+            os.makedirs(folder_path, exist_ok=True)
+            save_path = os.path.join(folder_path, file_name)
+        else:
+            raise ValueError(
+                "Both folder_path and file_name must be provided if save_figure is True."
+            )
+
+        plt.savefig(save_path)
 
     plt.show()
 
@@ -79,17 +102,32 @@ def compare_sindy_coefficients(
     discovered_xi_plot = discovered_xi.copy()
     discovered_xi_plot = np.abs(discovered_xi_plot)
 
-    row_labels = [f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)]
+    row_labels = [
+        f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)
+    ]
     n_labels = len(row_labels)
     middle_index = n_labels // 2
 
     # Defining the y-ticks and labels to include ellipsis
     yticks = [0, 1, 2, n_labels - 2, n_labels - 1]
-    yticks_labels = [row_labels[0], row_labels[1], row_labels[2], row_labels[-2], row_labels[-1]]
+    yticks_labels = [
+        row_labels[0],
+        row_labels[1],
+        row_labels[2],
+        row_labels[-2],
+        row_labels[-1],
+    ]
 
     if n_labels > 4:
         yticks = [0, 1, 2, middle_index, n_labels - 2, n_labels - 1]
-        yticks_labels = [row_labels[0], row_labels[1], row_labels[2], fr"$\vdots$", row_labels[-2], row_labels[-1]]
+        yticks_labels = [
+            row_labels[0],
+            row_labels[1],
+            row_labels[2],
+            rf"$\vdots$",
+            row_labels[-2],
+            row_labels[-1],
+        ]
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
 
@@ -100,7 +138,7 @@ def compare_sindy_coefficients(
     ax.set_xticks([])
     ax.set_yticks(yticks)
     ax.set_yticklabels(yticks_labels, fontsize=12)
-    ax.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
+    ax.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
     fig.colorbar(cax, ax=ax)
 
     # Plot discovered coefficients
@@ -112,7 +150,7 @@ def compare_sindy_coefficients(
     ax.set_yticklabels(yticks_labels, fontsize=12)
     fig.colorbar(cax, ax=ax)
 
-    plt.tick_params(axis='y', which='both', length=0)  # Disable ticks on the y-axis
+    plt.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
 
     if save_figure:
@@ -132,7 +170,6 @@ if __name__ == "__main__":
     true_xi[3, 1] = 1.8
     true_xi[5, 2] = 2.9
 
-
     discovered_xi = np.zeros((10, 3))
     discovered_xi[1, 0] = 0.9
     discovered_xi[3, 1] = 1.7
@@ -149,5 +186,7 @@ if __name__ == "__main__":
         "include_constant": include_constant,
     }
     # Plot comparison without saving
-    compare_sindy_coefficients(true_xi, discovered_xi, library_hparams=lib_kwargs, second_order=False)
+    compare_sindy_coefficients(
+        true_xi, discovered_xi, library_hparams=lib_kwargs, second_order=False
+    )
     plot_sindy_coefficients(true_xi, library_hparams=lib_kwargs, second_order=True)
