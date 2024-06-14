@@ -1,0 +1,25 @@
+\subsection{Lorenz System}
+\subsubsection{Problem Formulation}
+We remind the reader of the Lorenz ODE system given in equation \ref{eq:lorenz}, which we repeat here:
+\begin{equation*}
+\begin{aligned}
+    \dot{x} &= \sigma (y - x), \\
+    \dot{y} &= x (\rho - z) - y, \\
+    \dot{z} &= x y - \beta z,
+\end{aligned}
+\end{equation*}
+where the parameters $\sigma$, $\rho$, and $\beta$ are set to 10, 28, and $8/3$, respectively. 
+As said, we attempt to reproduce the results of \textcite{Champion_2019}.
+
+Hence, given the high-dimensional data generation discussed in \ref{sec:method}, we consider an encoder with layer widths widths $[128, 64, 32, 3]$, and a decoder with layer widths $[3, 32, 64, 128]$, where 128 is the dimension of our high-dimensional data, and 3 is the dimension of our latent-space. 
+We consider a loss formulation with regularization, running $10,000$ initial epochs with regularization and sequential least squares thresholding, before running an additional $1,000$ simulations without regularization. 
+To optimize our SINDy Autoencoder, we apply \textsc{ADAM} with a learning rate of $1e-3$. 
+Further specifics about the training parameters can be found in \textcolor{red}{ref table}. 
+
+\subsubsection{Results}
+Using the above formulation, we run 
+
+\subsection{Non-linear Pendulum}
+\subsubsection{Problem Formulation}
+
+\subsubsection{Results}
