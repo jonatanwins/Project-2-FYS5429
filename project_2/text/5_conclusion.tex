@@ -1,0 +1,28 @@
+In conclusion, we are able to to rediscover the true dynamics of a Lorenz system and the nonlinear pendulu through our autoencoder SINDy implementation. 
+In doing so, we validate our results against the findings of \textcite{Champion_2019}, achieving similar results. 
+Our findings indicate that 
+
+Nevertheless, different potential improvements might be introduced to aid the convergence and robustness of the model. 
+As the aim of our experiments was to display the autoencoder SINDy framework, we set a constant learning rate similar to \textcite{Champion_2019}. 
+Nevertheless, \textsc{ADAM} is frequently used with decreasing learning rates through learning rate schedulers to achieve higher precision, as it often is unstable at high learning rates. 
+
+Moreover, alternative optimization algorithms to \textsc{ADAM} might provide fruitful in improving the performance of the framework. 
+One reason for this is that \textsc{ADAM} relies on first - and second order - moments to determine its gradient direction, relying on its memory of older gradients. 
+However, pairing this with \textit{sequential threshold least squares} means that we periodically change the loss landscape by masking away certain SINDy coefficients. 
+This approach is potentially inharmonious with \textsc{ADAM}'s moment-based approach as the momentum is not representative of the updated loss landscape. 
+In addition, by introducing regularization into the loss formulation, we rely on \textsc{ADAM}'s gradient based methods, differentiating the non-differentiable $L_1$-regularization loss.
+Although this yields sufficient performance in the aforementioned experiments, other optimization methods that rectify these potential challenges might yield improved performance. 
+
+In fact, \textcite{SR3} have proposed an alternative optimization algorithm to sequential threshold least squares named SR3. 
+SR3 is a sparse regression method, applying \textit{relaxation} to the original loss formulation and relying on proximal gradients for determining optimzal descent directions on non-smooth objectives, promising computational efficiency, higher accuracy, faster convergence rates, and greater flexibility compared to traditional methods. 
+SR3 has already successfully been demonstrated for regular SINDy \cite{SR3_SINDy}, yielding strong performance. 
+Hence, it might be constructive to further explore the SR3 algorihtm, and to extend it to the Autoencoder SINDy framework. 
+
+Another challenge with the Autoencoder SINDy formulation is the introduction of increased hyperparameters through the loss weights, resulting in having to balance reconstruction, regularization, and the two dynamical losses. 
+\textcite{Champion_2019} provides some empirically successful methods to set the hyperparameters, but it is uncertain if a more complex tuning stage can yield improvements to the training algorithm. 
+
+%%%% Discuss graph neural networks, perhaps alternative SINDy models. This remains to be done
+Alternative SINDy formulations also exist, like implicit SINDy \textcite{} ... . However, as seen by the experiments, the computational load of Autoencoder SINDy can become quite significant, ... . Hence, it might be interesting to investigate how one can incoroporate similar ideas to implicit SINDy into the Autoencoder framework. 
+
+Scientific machine learning seems to be increasingly developing towards reliable and interpretable models. 
+With the advent of improved sparse regularization methods in addition to existing dynamical discovery frameworks like Autoencoders, the Autoencoder SINDy framework provides a blueprint to discovering parsimonious governing equations of physical systems, thus aiding the interpretability of such systems. 

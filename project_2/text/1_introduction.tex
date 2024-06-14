@@ -1,0 +1,30 @@
+Governing equations are of fundamental importance in science and engineering. 
+Accurate models give insight into physical processes, facilitating further scientific and engineering discovery. 
+Traditionally, governing equations have been derived based on underlying first principles, such as conservation laws and symmetries, or from universal laws, like Newton's laws of motion. 
+A benefit of applying first principles is analytic transparency, guaranteeing insight into the important dynamics of the system of interest. 
+However, it is often cumbersome or untenable to derive governing equations through first principles. 
+Moreover, the governing equations of many modern systems remain unknown. 
+Nevertheless, we are increasingly able to store data of these systems through emerging sensor and measurement technologies \cite{Champion_2019}. 
+Thus, it becomes natural to explore whether we can develop effective data-driven model discovery. 
+
+A crucial aspect of discovering governing equations is balancing model accuracy and efficiency with descriptive capabilities. 
+Thus, it becomes important to extract parsimonious models from potentially noisy data, avoiding over-fitting and negligible dynamics. 
+Discovering the fewest terms required to describe the dynamics is therefore essential to promoting interpretability and generalizability. 
+Generating sparse models has therefore become an active area of research. 
+Consequently, In 2016, \textcite{Brunton_2016} proposed the \textit{Sparse Identification of Nonlinear Dynamics} (SINDy) model, utilizing machine learning and improvements in sparse optimization to discover governing equations from noisy measurement data. 
+
+Still, obtaining parsimonious models is fundamentally linked to the coordinate system in which the dynamics are measured. 
+Hence, discovering the correct coordinate transform is central to developing a strong model. 
+Autoencoders have been used extensively throughout scientific machine learning to compress data into a lower-dimensional latent space, or coordinate system. \textcite{Champion_2019} proposed a framework combining autoencoders and the SINDy model for simultaneous data-driven discovery of coordinates and governing equations in 2019.
+
+We focus our attention in this report on the autoencoder SINDy framework, combining the strengths of deep neural networks for flexible coordinate representation with sparse identification of non-linear dynamics. 
+In this method, measurement data is passed through an encoder to find a latent space representation. 
+The SINDy algorithm is then applied in the latent space. 
+It uses a candidate library of terms to perform sparse regression to fit the latent space data. 
+The output of the SINDy algorithm is then passed through the decoder, and evaluated against the data in the decoded coordinate system. 
+Both the autoencoder and the SINDy model are trained simultaneously using various optimization algorithms. 
+We aim to reproduce some of the results from \textcite{Champion_2019}.%, before applying the method to the three-body problem. 
+
+To do so, we provide a framework for the implementation of such problems, with the focus on modularity in order for the framework to generalize for a wide variety of problems. Hence, we use \verb|JAX| \cite{jax2018github} in order to achieve good performance in \verb|Python|, coupling it with \verb|Optax| \cite{deepmind2020jax} in order to perform the optimization steps. 
+
+We begin by covering the necessary preliminaries of differential equations, neural networks and the SINDy framework, before discussing how these topics combine for the autoencoder SINDy framework. Following, we cover the necessary methodology used within our implementation, such as sparse optimization methods. Finally, we test our implementation on the Lorenz problem and a swinging pendulum problem.%, a swinging pendulum problem, and finally the three-body problem. 
