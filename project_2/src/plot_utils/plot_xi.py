@@ -1,6 +1,7 @@
 import numpy as np
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import os
 from typing import Optional, Dict
 from sindyLibrary import get_row_context
@@ -99,6 +100,7 @@ def compare_sindy_coefficients(
     library_hparams,
     second_order: bool = False,
     save_figure: bool = False,
+    file_name: Optional[str] = None,
     save_path: Optional[str] = None,
 ):
     """Plots and optionally saves the true and discovered SINDy coefficients side by side.
@@ -110,12 +112,7 @@ def compare_sindy_coefficients(
         save_path (Optional[str]): Path to save the figure.
     """
     true_xi_plot = true_xi.copy()
-    true_xi_plot = np.abs(true_xi_plot)
-
     discovered_xi_plot = discovered_xi.copy()
-    discovered_xi_plot = np.abs(discovered_xi_plot)
-
-    max_val = max(round(max(jnp.concatenate(true_xi_plot)), 0), round(max(jnp.concatenate(discovered_xi_plot)), 0))
 
     row_labels = [
         f"${x}$" for x in get_row_context(library_hparams, second_order=second_order)
@@ -127,9 +124,18 @@ def compare_sindy_coefficients(
     yticks = [0]
     yticks_labels = [r"$1$"]
     for i in range(1, len(row_labels)):
-        if true_row_sums[i] != 0 or discovered_row_sums[i] != 0:
+        if True: #true_row_sums[i] != 0 or discovered_row_sums[i] != 0:
             yticks.append(i)
             yticks_labels.append(row_labels[i])
+
+    true_xi_plot = np.abs(true_xi_plot)
+    #true_xi_plot[true_xi_plot==0] = -100
+
+    discovered_xi_plot = np.abs(discovered_xi_plot)
+    #discovered_xi_plot[discovered_xi_plot==0] = -100
+
+    max_val = max(round(max(jnp.concatenate(true_xi_plot)), 0), round(max(jnp.concatenate(discovered_xi_plot)), 0))
+    
 
     """
     # Maybe remove?
@@ -158,28 +164,30 @@ def compare_sindy_coefficients(
         ]
     """
 
-    fig, axes = plt.subplots(1, 2, figsize=(5, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(3.4, 4.5))
 
     # Plot true coefficients
     ax = axes[0]
-    cax = ax.imshow(true_xi_plot, interpolation="none", cmap="Reds")
-    cax.set_clim(0, max_val)
+    cax = ax.imshow(true_xi_plot, interpolation="none", cmap="YlOrBr", norm=LogNorm())
+    cax.set_clim(0.1, max_val)
     ax.set_title("True Coefficients")
     ax.set_xticks([])
     ax.set_yticks(yticks)
-    ax.set_yticklabels(yticks_labels, fontsize=12)
+    ax.set_yticklabels(yticks_labels, fontsize=10)
     ax.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
     #fig.colorbar(cax, ax=ax)
 
     # Plot discovered coefficients
     ax = axes[1]
-    cax = ax.imshow(discovered_xi_plot, interpolation="none", cmap="Reds")
-    cax.set_clim(0, max_val)
+    cax = ax.imshow(discovered_xi_plot, interpolation="none", cmap="YlOrBr", norm=LogNorm())
+    cax.set_clim(0.1, max_val)
     ax.set_title("Discovered Coefficients")
     ax.set_xticks([])
     ax.set_yticks(yticks)
-    ax.set_yticklabels(yticks_labels, fontsize=12)
-    fig.colorbar(cax, ax=ax)
+    ax.set_yticklabels(yticks_labels, fontsize=10)
+
+    cbar = fig.colorbar(cax, ax=ax, ticks=[0.1, np.floor(max_val//8), np.floor(max_val//4), np.floor(max_val//2), np.floor(max_val)])
+    cbar.ax.set_yticklabels(['0', f'{np.floor(max_val//8)}', f'{np.floor(max_val//4)}', f'{np.floor(max_val//2)}', f'{np.floor(max_val)}'])
 
     plt.tick_params(axis="y", which="both", length=0)  # Disable ticks on the y-axis
     plt.tight_layout()
@@ -187,7 +195,10 @@ def compare_sindy_coefficients(
     if save_figure:
         save_path = save_path or "."
         os.makedirs(save_path, exist_ok=True)
-        plt.savefig(os.path.join(save_path, "compare_sindy_coefficients.png"))
+        if file_name:
+            plt.savefig(os.path.join(save_path, file_name))
+        else:
+            plt.savefig(os.path.join(save_path, "compare_sindy_coefficients.png"))
 
     plt.show()
 
