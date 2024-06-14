@@ -47,7 +47,7 @@ where the parameters $\sigma$, $\rho$, and $\beta$ are typically set to 10, 28, 
 % \end{figure}
 
 \subsubsection{Initial Conditions for the Lorenz Dataset}
-Adequate diversity in initial conditions is essential for exploring the dynamics of the Lorenz system, especially due to its chaotic nature, which heavily depends on these starting points. We generate initial conditions using a uniform distribution within specified bounds for each variable:
+We follow the method used by \textcite{Champion_2019} to generate initial conditions using a uniform distribution within set bounds for each variable.
 \begin{equation}
 \begin{aligned}
     x &\sim \mathcal{U}(-20, 20), \\
@@ -116,11 +116,35 @@ To facilitate the study of the pendulum in the autoencoder-SINDy framework, we t
 where \(y_1\) and \(y_2\) span a discretized grid in the range \([-1.5, 1.5]\) with 51 grid points in each dimension, resulting in snapshots \(x(t) \in \mathbb{R}^{2601}\). This transformation not only enriches the input features but also provides a novel way to apply autoencoder frameworks for learning the underlying dynamics from visually interpretable data. The high-dimensional snapshots capture the pendulum's position over time, creating a detailed visual dataset that facilitates the application of image-based learning techniques.
 
 \subsection{Optimization}
-A brief introduction to the ADAM optimizer 2-3 lines. Maybe show the optimization. It becomes relevant in the conclusion, since it turns out ADAM is not designed for these types of optimization. In fact, it is horrific. 1/10. 
+As stated, we employ the sequential thresholding least squares \cite{Brunton_2016} approach to training our SINDy Autoencoder.  
 
-We utilized the ADAM optimizer, which adjusts its learning rates based on the first and second moments of the gradient, to optimize our model. ADAM may struggle with SINDy because SINDy ???? requires precise identification of a small number of relevant features from potentially noisy data, where the adaptive nature of ADAM might introduce instability and fail to converge to the sparse solution needed.(Har konvergens skylden?)
+To optimize the least squares approach, we utilize the \textsc{ADAM} optimizer, originally proposed by \textcite{Adam}. \textsc{ADAM}, derived from adaptive moment estimation, is a gradient descent algorithm relying on first and second moments of the gradient to determine its descent direction. The full algorithm is displayed in \autoref{algo:ADAM}.
+\begin{figure}[h]
+    \begin{algorithm}[H]
+    \caption{\textsc{ADAM}. $g^2$ denotes the elementwise square. $\beta_1,\beta_2\in [0,1) $ are hyperparameters controlling the decay rates of the moments. $\alpha$ is the learning rate, and $\epsilon>0$ is a numerical stabilizer. 
+    The gradient is taken with respect to the autoencoder and SINDy parameters.}
+    \label{algo:ADAM} 
+       \begin{algorithmic}
+        \State \( g_{k} \gets \nabla\mathcal{L} \)
+        \State \(m_k \gets \beta_1 m_{k-1} + (1-\beta_1)g_k\) \Comment{\nth{1} order moment estimate}
+        \State \(v_k \gets \beta_2 m_{k-1} + (1-\beta_2)g_k^2\)\Comment{\nth{2} order moment estimate}
+        \State \(\hat{m_k} \gets \frac{m_k}{1-\beta_1^k}\)\Comment{bias correction}
+        \State \(\hat{v_k} \gets \frac{v_k}{1-\beta_2^k}\)\Comment{bias correction}
+        \State \(\theta_k \gets \theta_{k-1} - \alpha \frac{ \hat{m_k}}{\sqrt{\hat{v_k}+ \epsilon}}\)\Comment{Paramter update}
+        \end{algorithmic}
+    \end{algorithm}
+\end{figure}
 
+
+\textsc{ADAM} has become the de-facto optimization algorithm for many modern machine learning tasks, and it is applied extensively in the original Autoencoder SINDy paper \cite{Champion_2019}. Nevertheless, it is perhaps not suited to the non-differentiable $L_1$ terms in SINDy formulation, nor to sequential thresholding which periodically changes the loss landscape. We will explore these limitations further in the discussion 
 
 \subsection{Technical Details}
-Here we should write about JAX, FLAX (brief), and mention the codebase we downloaded from the dutch useless fuckers. 
-Moreover, we should mention that we used colab and the ML nodes at the university of Oslo to run the simulations. Maybe mention what type of GPUs the ML nodes have???
+We used \verb|JAX| \cite{jax2018github}, which is a library for automatic differentiation that allows for high-speed computations on both CPU and GPU which significantly speeds up large-scale model training. \verb|JAX| enables automatic differentiation through a variety of techniques, facilitating gradient-based optimization methods. Its ability to seamlessly handle large tensor operations and its compatibility with NumPy API which streamlines our development process. 
+
+We also used \verb|Flax| \cite{Flax2020github} which is built on top of \verb|JAX| for implementing the SINDy Autoencoder framework. \verb|Flax| simplifies model definition, training, and evaluation by offering a layer of abstractions for model architectures. \verb|Flax|’s modular design allows rapid experimentation with various model configurations. The \textsc{ADAM} optimizer is implemented through the \verb|Optax| \cite{deepmind2020jax} optimization library for \verb|JAX|. 
+
+Note that the baseline framework is based on that of \textcite{lippe2024}, although several modifications were made to improve SINDy Autoencoder specific performance. 
+
+\subsubsection{Hardware}
+We ran our simulations on the ML nodes at the University of Oslo\cite{uio_ml_nodes}, and on the GPUs available through Google Colab \cite{googlecolab}. 
+The simulations were ran on the ML nodes at the University of Oslo, and 

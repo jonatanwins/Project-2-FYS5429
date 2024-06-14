@@ -23,8 +23,8 @@ The SINDy algorithm is then applied in the latent space.
 It uses a candidate library of terms to perform sparse regression to fit the latent space data. 
 The output of the SINDy algorithm is then passed through the decoder, and evaluated against the data in the decoded coordinate system. 
 Both the autoencoder and the SINDy model are trained simultaneously using various optimization algorithms. 
-We aim to reproduce some of the results from \textcite{Champion_2019}.%, before applying the method to the three-body problem. 
+We aim to reproduce results which recoverd ordinary differential equations (ODEs) from \textcite{Champion_2019}.%, before applying the method to the three-body problem. 
 
 To do so, we provide a framework for the implementation of such problems, with the focus on modularity in order for the framework to generalize for a wide variety of problems. Hence, we use \verb|JAX| \cite{jax2018github} in order to achieve good performance in \verb|Python|, coupling it with \verb|Optax| \cite{deepmind2020jax} in order to perform the optimization steps. 
 
-We begin by covering the necessary preliminaries of differential equations, neural networks and the SINDy framework, before discussing how these topics combine for the autoencoder SINDy framework. Following, we cover the necessary methodology used within our implementation, such as sparse optimization methods. Finally, we test our implementation on the Lorenz problem and a swinging pendulum problem.%, a swinging pendulum problem, and finally the three-body problem. 
+We begin by covering the necessary preliminaries of ODEs, neural networks and the SINDy framework, before discussing how these topics combine for the autoencoder SINDy framework. Following, we cover the necessary methodology used within our implementation, such as sparse optimization methods. Finally, we test our implementation on the Lorenz problem and a swinging pendulum problem.%, a swinging pendulum problem, and finally the three-body problem. 
