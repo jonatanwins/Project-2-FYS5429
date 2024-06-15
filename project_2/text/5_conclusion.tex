@@ -1,6 +1,21 @@
-In conclusion, we are able to to rediscover the true dynamics of a Lorenz system and the nonlinear pendulu through our autoencoder SINDy implementation. 
+% Lorenz
+\textcite{Champion_2019} finds all the coefficients of the Lorenz equation \autoref{eq:lorenz}. Our best models are two terms off, it does not find the $\rho x$ term of $\dot{y} = x (\rho - z) - y$. It also adds a constant to $\dot{z}$. All our magnitudes are also lower than the true equations indicating that we find a system of particles moving slower than the true equations. In other words, instead of the true equations it finds
+\begin{equation*}
+\begin{aligned}
+    \dot{x} &= \sigma (y - x), \\
+    \dot{y} &= x (- z) - y, \\
+    \dot{z} &= x y - \beta z + C,
+\end{aligned}
+\end{equation*}
+Still the model roughly finds the underlying dynamics and the plotted result \autoref{fig:lorenz_discovered_dynamics} resembles the chaotic butterfly pattern of the true equations. We hypothesize that the reason it misses the one $\rho x$ term is that the $L_1$ regularization is too aggressive and penalizes the largest coefficient which is $\rho= 28$, as the $x$ term is weighted as less important for its size, the sequential threshold then prematurely removes the term of $x$ from the equation.
+
+%After removing it with an early sequential threshold, the model then tries to compensate by adding a constant term to $\dot z$ which in turn raises the value of $z$.
+
+% Pendulum
+Our pendulum models find the exact equation of motion. This shows that our SINDy implementation works, but finding the single correct coefficient for the sine term which is preset in the library is a simple task and is to be expected.
+
+In conclusion, we are able to to rediscover the true dynamics with only a slight error for the Lorenz system and perfectly for the nonlinear pendulum through our autoencoder SINDy implementation. 
 In doing so, we validate our results against the findings of \textcite{Champion_2019}, achieving similar results. 
-Our findings indicate that 
 
 Nevertheless, different potential improvements might be introduced to aid the convergence and robustness of the model. 
 As the aim of our experiments was to display the autoencoder SINDy framework, we set a constant learning rate similar to \textcite{Champion_2019}. 
@@ -14,15 +29,21 @@ In addition, by introducing regularization into the loss formulation, we rely on
 Although this yields sufficient performance in the aforementioned experiments, other optimization methods that rectify these potential challenges might yield improved performance. 
 
 In fact, \textcite{SR3} have proposed an alternative optimization algorithm to sequential threshold least squares named SR3. 
-SR3 is a sparse regression method, applying \textit{relaxation} to the original loss formulation and relying on proximal gradients for determining optimzal descent directions on non-smooth objectives, promising computational efficiency, higher accuracy, faster convergence rates, and greater flexibility compared to traditional methods. 
+SR3 is a sparse regression method, applying \textit{relaxation} to the original loss formulation and relying on proximal gradients for determining optimal descent directions on non-smooth objectives, promising computational efficiency, higher accuracy, faster convergence rates, and greater flexibility compared to traditional methods. 
 SR3 has already successfully been demonstrated for regular SINDy \cite{SR3_SINDy}, yielding strong performance. 
 Hence, it might be constructive to further explore the SR3 algorihtm, and to extend it to the Autoencoder SINDy framework. 
 
 Another challenge with the Autoencoder SINDy formulation is the introduction of increased hyperparameters through the loss weights, resulting in having to balance reconstruction, regularization, and the two dynamical losses. 
-\textcite{Champion_2019} provides some empirically successful methods to set the hyperparameters, but it is uncertain if a more complex tuning stage can yield improvements to the training algorithm. 
+\textcite{Champion_2019} provides some empirically successful methods to set the hyperparameters, but it is uncertain if a more complex tuning stage can yield improvements to the training algorithm.
+
+\subsection{Symbolic regression}
+SINDy is one of many methods within the broader category of symbolic regression. What differentiates SINDy from other methods is that it requires a predefined library of candidate terms where each suspected term is computationally costly to include. This can be a big assumption to make depending on the system of study. There are other symbolic regression which do not rely on a fixed library. One such method is PySR \cite{cranmer2020discovering} which also is less limited in its space of potential solutions. PySR instead uses a library of operators which it applies through a genetic algorithm to its population of solutions. This lets PySR explore a broader space of potential models than SINDy. On the other hand, SINDy might more easily find a sparse solution, since it has to conform to its library. 
 
 %%%% Discuss graph neural networks, perhaps alternative SINDy models. This remains to be done
-Alternative SINDy formulations also exist, like implicit SINDy \textcite{} ... . However, as seen by the experiments, the computational load of Autoencoder SINDy can become quite significant, ... . Hence, it might be interesting to investigate how one can incoroporate similar ideas to implicit SINDy into the Autoencoder framework. 
+
+%Alternative SINDy formulations also exist, like implicit SINDy \textcite{} ... . However, as seen by the experiments, the computational load of Autoencoder SINDy can become quite significant, ... . Hence, it might be interesting to investigate how one can incoroporate similar ideas to implicit SINDy into the Autoencoder framework. 
 
 Scientific machine learning seems to be increasingly developing towards reliable and interpretable models. 
 With the advent of improved sparse regularization methods in addition to existing dynamical discovery frameworks like Autoencoders, the Autoencoder SINDy framework provides a blueprint to discovering parsimonious governing equations of physical systems, thus aiding the interpretability of such systems. 
+
+\textcite{Champion_2019}'s autoencoder SINDy has drawbacks in performance due to its fixed library and costly loss function, but its sparse nature resulting in strong interpretability still makes further research and refinements to autoencoder SINDy worthwhile.
