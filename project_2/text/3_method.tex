@@ -3,9 +3,7 @@ To do so, we first generate the data using traditional methods, before attemptin
 
 
 \subsection{Data Generation}
-
 This section describes the process used to generate datasets for training and evaluating the autoencoder SINDy framework, specifically focusing on the Lorenz system, and the nonlinear pendulum. Additionally, we discuss the transformation of the simulated data into a high-dimensional dataset which tests the framework's ability to discover the underlying low-dimensional dynamics.
-
 
 \subsubsection{Lorenz System}
 Introduced by Edward Lorenz in 1963 \cite{lorenz1963deterministic}, the Lorenz system is a simplified mathematical model for atmospheric convection, represented by a set of three ordinary differential equations (ODEs):
@@ -23,7 +21,7 @@ where the parameters $\sigma$, $\rho$, and $\beta$ are typically set to 10, 28, 
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=0.48\textwidth]{project_2/images/lorenz_static.pdf}
-    \caption{The Lorenz system's chaotic trajectory from initial conditions [1, 1, 1], depicting the typical butterfly-shaped attractor.}
+    \caption{\textbf{Lorenz phase space:} This figure shows the Lorenz system's chaotic trajectory from initial conditions [1, 1, 1], depicting the typical butterfly-shaped attractor.}
     \label{fig:lorenz}
 \end{figure}
 
@@ -118,12 +116,12 @@ where \(y_1\) and \(y_2\) span a discretized grid in the range \([-1.5, 1.5]\) w
 \subsection{Optimization}
 As stated, we employ the sequential thresholding least squares \cite{Brunton_2016} approach to training our SINDy Autoencoder.  
 
-To optimize the least squares approach, we utilize the \textsc{ADAM} optimizer, originally proposed by \textcite{Adam}. \textsc{ADAM}, derived from adaptive moment estimation, is a gradient descent algorithm relying on first and second moments of the gradient to determine its descent direction. The full algorithm is displayed in \autoref{algo:ADAM}.
+To optimize the least squares approach, we utilize the \textsc{Adam} optimizer, originally proposed by \textcite{Adam}. \textsc{Adam}, derived from adaptive moment estimation, is a gradient descent algorithm relying on first and second moments of the gradient to determine its descent direction. The full algorithm is displayed in \autoref{algo:Adam}.
 \begin{figure}[h]
     \begin{algorithm}[H]
-    \caption{\textsc{ADAM}. $g^2$ denotes the elementwise square. $\beta_1,\beta_2\in [0,1) $ are hyperparameters controlling the decay rates of the moments. $\alpha$ is the learning rate, and $\epsilon>0$ is a numerical stabilizer. 
+    \caption{\textsc{Adam}. $g^2$ denotes the elementwise square. $\beta_1,\beta_2\in [0,1) $ are hyperparameters controlling the decay rates of the moments. $\alpha$ is the learning rate, and $\epsilon>0$ is a numerical stabilizer. 
     The gradient is taken with respect to the autoencoder and SINDy parameters.}
-    \label{algo:ADAM} 
+    \label{algo:Adam} 
        \begin{algorithmic}
         \State \( g_{k} \gets \nabla\mathcal{L} \)
         \State \(m_k \gets \beta_1 m_{k-1} + (1-\beta_1)g_k\) \Comment{\nth{1} order moment estimate}
@@ -136,15 +134,19 @@ To optimize the least squares approach, we utilize the \textsc{ADAM} optimizer, 
 \end{figure}
 
 
-\textsc{ADAM} has become the de-facto optimization algorithm for many modern machine learning tasks, and it is applied extensively in the original Autoencoder SINDy paper \cite{Champion_2019}. Nevertheless, it is perhaps not suited to the non-differentiable $L_1$ terms in SINDy formulation, nor to sequential thresholding which periodically changes the loss landscape. We will explore these limitations further in the discussion 
+\textsc{Adam} has become the de-facto optimization algorithm for many modern machine learning tasks, and it is applied extensively in the original Autoencoder SINDy paper \cite{Champion_2019}. Nevertheless, it is perhaps not suited to the non-differentiable $L_1$ terms in SINDy formulation, nor to sequential thresholding which periodically changes the loss landscape. We will explore these limitations further in the computational experiments. 
 
 \subsection{Technical Details}
-We used \verb|JAX| \cite{jax2018github}, which is a library for automatic differentiation that allows for high-speed computations on both CPU and GPU which significantly speeds up large-scale model training. \verb|JAX| enables automatic differentiation through a variety of techniques, facilitating gradient-based optimization methods. Its ability to seamlessly handle large tensor operations and its compatibility with NumPy API which streamlines our development process. 
+For our SINDy autoencoder implementation, we used \verb|JAX| \cite{jax2018github}, which is a library for automatic differentiation that allows for high-speed computations on both CPU and GPU which significantly speeds up large-scale model training. 
+\verb|JAX| enables automatic differentiation through a variety of techniques, facilitating gradient-based optimization methods. 
+Its ability to seamlessly handle large tensor operations and its compatibility with NumPy API which streamlines our development process. 
 
-We also used \verb|Flax| \cite{Flax2020github} which is built on top of \verb|JAX| for implementing the SINDy Autoencoder framework. \verb|Flax| simplifies model definition, training, and evaluation by offering a layer of abstractions for model architectures. \verb|Flax|’s modular design allows rapid experimentation with various model configurations. The \textsc{ADAM} optimizer is implemented through the \verb|Optax| \cite{deepmind2020jax} optimization library for \verb|JAX|. 
+We also used \verb|Flax| \cite{Flax2020github} which is built on top of \verb|JAX| for implementing the SINDy Autoencoder framework. 
+\verb|Flax| simplifies model definition, training, and evaluation by offering a layer of abstractions for model architectures. 
+\verb|Flax|’s modular design allows rapid experimentation with various model configurations. 
+The \textsc{Adam} optimizer is implemented through the \verb|Optax| \cite{deepmind2020jax} optimization library for \verb|JAX|. 
 
-Note that the baseline framework is based on that of \textcite{lippe2024}, although several modifications were made to improve SINDy Autoencoder specific performance. 
+Note that the baseline framework is based on that of \textcite{lippe2024}, although several modifications were made to improve SINDy autoencoder-specific performance. 
 
 \subsubsection{Hardware}
-We ran our simulations on the ML nodes at the University of Oslo\cite{uio_ml_nodes}, and on the GPUs available through Google Colab \cite{googlecolab}. 
-The simulations were ran on the ML nodes at the University of Oslo, and 
+We ran our simulations on the ML nodes at the University of Oslo \cite{uio_ml_nodes}, and on the GPUs available through Google Colab \cite{googlecolab}. 
