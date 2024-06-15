@@ -191,7 +191,7 @@ where $\mathbf{W}^{(l)}$ is the weight matrix, $\mathbf{a}^{(l-1)}$ is the activ
 $$
 \mathbf{a}^{(l)}=g\left(\mathbf{z}^{(l)}\right)
 $$
-To evaluate  loss function measures hoe poor the model performs.
+The model behaviour determined by these weights and biases is then evaluated in the loss function. Which measures how poorly our model performed.
 %Then we can use this prediction to compute the loss function $\mathcal{L}(\hat{\mathbf{y}}, \mathbf{y})$ which quantifies the error between the predicted output $\hat{\mathbf{y}}$ and the true target output $\mathbf{y}$.
 
 With the calculated loss we can use backpropogation to compute the gradient of the loss function with respect to each weight $\mathbf{W}^{(l)}$ and bias $\mathbf{b}^{(l)}$. 
